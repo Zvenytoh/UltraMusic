@@ -1,0 +1,7 @@
+/target/
+/.tools/
+/benchmarks/results/
+*.log
+/.env
+/.env.*
+/WebView2/
