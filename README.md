@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="UltraMusic — Keep the audio. Stop the unnecessary work." width="1280">
+  <img src="assets/banner.png" alt="UltraMusic — Keep the audio. Stop the unnecessary work." width="1280">
 </p>
 
 <h1 align="center">UltraMusic</h1>
@@ -195,7 +195,7 @@ UltraMusic/
 │       ├── webview.rs     Contrôleur et callbacks WebView2
 │       ├── window.rs      Fenêtre, messages et visibilité
 │       └── tray.rs        Icône de notification et menu
-├── assets/                Logo et bannière SVG
+├── assets/                Logo, bannière et icône Windows
 ├── docs/                  Architecture, spécification et validation
 ├── scripts/               Outils de développement
 └── .github/workflows/     Compilation et contrôles Windows
@@ -246,6 +246,7 @@ veille/reprise, restauration et benchmarks comparatifs à effectuer.
 
 | Ressource | Contenu |
 | :--- | :--- |
+| [Identité visuelle](docs/BRANDING.md) | Logo, formats et utilisation |
 | [Architecture](docs/ARCHITECTURE.md) | Modules, durée de vie, événements et frontière de confiance |
 | [Spécification](docs/SPECIFICATION.md) | Objectifs et périmètre du projet |
 | [Validation](docs/VALIDATION.md) | Scénarios fonctionnels et protocole de mesure |
@@ -260,13 +261,13 @@ de mots de passe ni de profil WebView2.
 
 ## Licence
 
-Distribué sous [licence MIT](LICENSE). Les visuels SVG originaux du dépôt sont
+Distribué sous [licence MIT](LICENSE). Les visuels du projet sont
 couverts par cette même licence.
 
 UltraMusic est un projet indépendant, sans affiliation avec Apple, Google,
 YouTube ou Microsoft. Les noms des services appartiennent à leurs titulaires.
 
 <p align="center">
-  <img src="assets/logo.svg" width="48" height="48" alt="Logo UltraMusic"><br>
+  <img src="assets/logo.png" width="48" height="48" alt="Logo UltraMusic"><br>
   <sub>Keep the audio. Stop the unnecessary work.</sub>
 </p>

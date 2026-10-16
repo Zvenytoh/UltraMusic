@@ -8,7 +8,7 @@ param([ValidateSet('check', 'build', 'fmt', 'clippy')][string]$Task = 'build')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $savedEnvironment = @{}
-foreach ($name in @('RUSTUP_HOME', 'CARGO_HOME', 'PATH', 'RUSTFLAGS', 'CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER')) {
+foreach ($name in @('RUSTUP_HOME', 'CARGO_HOME', 'PATH', 'RUSTFLAGS', 'WINDRES', 'CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER')) {
     $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
 $localToolchain = Test-Path "$root\.tools\cargo\bin\cargo.exe"
@@ -25,6 +25,13 @@ try {
         if ($mingw.Contains(' ')) { throw 'The local GNU build requires Windows short-path support.' }
         $env:PATH = "$root\.tools\cargo\bin;$mingw\bin;$env:PATH"
         $env:CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "$mingw\bin\gcc.exe"
+        # LLVM's resource compiler handles spaces in the workspace path correctly.
+        # Preserve an explicitly selected compiler; otherwise prefer it when present.
+        if (-not $env:WINDRES) {
+            $llvmWindres = Get-ChildItem "$root\.tools\llvm-mingw*\bin\llvm-windres.exe" -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if ($llvmWindres) { $env:WINDRES = $llvmWindres.FullName }
+        }
         $specs = Join-Path (Split-Path $mingw -Parent) 'rust-link.specs'
         "*endfile:`ncrtend.o%s`n" | Set-Content -LiteralPath $specs -Encoding ascii
         $env:RUSTFLAGS = "$env:RUSTFLAGS -C link-arg=-specs=$($specs.Replace('\', '/'))".Trim()

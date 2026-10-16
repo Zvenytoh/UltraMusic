@@ -9,6 +9,9 @@ repository = "https://github.com/Zvenytoh/UltraMusic"
 keywords = ["music", "webview2", "windows"]
 categories = ["multimedia::audio"]
 
+[build-dependencies]
+winresource = "0.1.34"
+
 [dependencies]
 url = "2.5"
 webview2-com = "0.39.1"

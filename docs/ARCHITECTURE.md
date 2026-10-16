@@ -28,6 +28,12 @@ possède le handle du mutex et le ferme exactement une fois. À la sortie, le
 contrôleur est fermé, l’icône supprimée et les références COM libérées avant la
 désinitialisation du STA. Aucun processus tiers n’est tué.
 
+`build.rs` incorpore l'icône multi-tailles et les métadonnées de l'exécutable via
+une dépendance de compilation `winresource`. La fenêtre et la notification
+réutilisent la ressource partagée `ULTRAMUSIC_ICON`, possédée par le module Windows ;
+elle ne doit pas être libérée avec `DestroyIcon`. Aucun fichier image externe
+n'est nécessaire à l'exécution. Les formats sont décrits dans [BRANDING.md](BRANDING.md).
+
 ## Asynchronisme et erreurs
 
 Chaque création/redémarrage invalide la génération précédente. Les callbacks

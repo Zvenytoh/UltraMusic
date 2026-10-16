@@ -27,7 +27,7 @@ use windows::{
             WindowsAndMessaging::{
                 CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, LoadIconW,
                 MessageBoxW, RegisterClassW, RegisterWindowMessageW, ShowWindow, TranslateMessage,
-                CW_USEDEFAULT, IDC_ARROW, IDI_APPLICATION, MB_ICONERROR, MB_OK, MESSAGEBOX_RESULT,
+                CW_USEDEFAULT, HICON, IDC_ARROW, MB_ICONERROR, MB_OK, MESSAGEBOX_RESULT,
                 MESSAGEBOX_STYLE, MSG, SW_SHOW, WM_APP, WNDCLASSW, WS_OVERLAPPEDWINDOW,
             },
         },
@@ -43,6 +43,7 @@ const EXTERNAL: u32 = WM_APP + 4;
 thread_local! { static APP: RefCell<Option<Rc<App>>> = const { RefCell::new(None) }; }
 struct App {
     hwnd: HWND,
+    icon: HICON,
     config: Config,
     profile: HSTRING,
     controller: RefCell<Option<ICoreWebView2Controller>>,
@@ -96,12 +97,15 @@ pub(crate) fn run() -> std::result::Result<(), String> {
         let _com = Com;
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let instance = HINSTANCE(GetModuleHandleW(None).map_err(|e| e.to_string())?.0);
+        // The named resource is emitted by build.rs. LoadIconW returns a shared icon
+        // owned by the module, so it must not be passed to DestroyIcon.
+        let icon = LoadIconW(Some(instance), w!("ULTRAMUSIC_ICON")).map_err(|e| e.to_string())?;
         let class = WNDCLASSW {
             hInstance: instance,
             lpszClassName: CLASS,
             lpfnWndProc: Some(window_proc),
             hCursor: LoadCursorW(None, IDC_ARROW).map_err(|e| e.to_string())?,
-            hIcon: LoadIconW(None, IDI_APPLICATION).map_err(|e| e.to_string())?,
+            hIcon: icon,
             ..Default::default()
         };
         if RegisterClassW(&class) == 0 {
@@ -124,6 +128,7 @@ pub(crate) fn run() -> std::result::Result<(), String> {
         .map_err(|e| e.to_string())?;
         let state = Rc::new(App {
             hwnd,
+            icon,
             keep_rendering: Cell::new(config.keep_rendering),
             config,
             profile: HSTRING::from(profile.as_os_str()),

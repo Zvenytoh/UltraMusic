@@ -32,8 +32,7 @@ impl App {
         let mut data = self.tray_data();
         data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
         data.uCallbackMessage = TRAY;
-        // SAFETY: the predefined shared icon is owned by Windows, not by this app.
-        data.hIcon = unsafe { LoadIconW(None, IDI_APPLICATION) }.unwrap_or_default();
+        data.hIcon = self.icon;
         for (to, from) in data
             .szTip
             .iter_mut()
