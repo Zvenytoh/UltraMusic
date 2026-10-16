@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-labelledby="title desc">
+  <title id="title">UltraMusic</title>
+  <desc id="desc">Un U formé par un casque audio, avec un symbole de lecture cyan.</desc>
+  <defs>
+    <linearGradient id="accent" x1="40" y1="38" x2="153" y2="157" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#63E6DA"/>
+      <stop offset="1" stop-color="#829CFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="190" height="190" rx="48" fill="#101827" stroke="#2A3850" stroke-width="2"/>
+  <path d="M48 97V83a48 48 0 0 1 96 0v14" fill="none" stroke="url(#accent)" stroke-width="12" stroke-linecap="round"/>
+  <path d="M54 98v22a42 42 0 0 0 84 0V98" fill="none" stroke="url(#accent)" stroke-width="12" stroke-linecap="round"/>
+  <rect x="37" y="84" width="23" height="43" rx="11.5" fill="#63E6DA"/>
+  <rect x="132" y="84" width="23" height="43" rx="11.5" fill="#829CFF"/>
+  <path d="M88 79a4 4 0 0 1 6-3l25 17a4 4 0 0 1 0 6l-25 17a4 4 0 0 1-6-3Z" fill="#F1FAFF"/>
+</svg>
