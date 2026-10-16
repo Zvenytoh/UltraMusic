@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="assets/banner.png" alt="UltraMusic — Keep the audio. Stop the unnecessary work." width="1280">
-</p>
-
 <h1 align="center">UltraMusic</h1>
 
 <p align="center">
