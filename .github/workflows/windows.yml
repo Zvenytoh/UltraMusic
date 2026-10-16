@@ -16,13 +16,37 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo build --release --locked
+      - name: Package portable download
+        shell: pwsh
+        run: ./scripts/package.ps1
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: UltraMusic-windows-x64
-          path: |
-            target/release/ultramusic.exe
-            README.md
-            LICENSE
-            CONTRIBUTING.md
-            assets/
-            docs/
+          path: target/release/UltraMusic-windows-x64.zip
+          if-no-files-found: error
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Publish prototype download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name UltraMusic-windows-x64 --dir release
+          cat > release-notes.md <<'NOTES'
+          ## Télécharger UltraMusic
+
+          Télécharger **UltraMusic-windows-x64.zip** dans les fichiers ci-dessous,
+          extraire le ZIP, puis double-cliquer sur **UltraMusic.exe**.
+          Aucun compte GitHub n'est nécessaire pour télécharger cette archive publique.
+
+          Windows 11 x64 et Microsoft Edge WebView2 Evergreen sont requis.
+
+          **Prototype** : la connexion aux services, les DRM et la lecture prolongée
+          restent à valider. Les performances CPU/GPU ne sont pas encore mesurées.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" release/UltraMusic-windows-x64.zip --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME — Prototype Windows" --notes-file release-notes.md

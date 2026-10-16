@@ -25,6 +25,11 @@
   <a href="https://github.com/Zvenytoh/UltraMusic/issues">Signaler un problème</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic-windows-x64.zip"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger_pour_Windows-11_x64-6866E8?style=for-the-badge" alt="Télécharger UltraMusic pour Windows 11 x64"></a><br>
+  <sub>ZIP portable · Version 0.1.0 prototype · Sans compte GitHub</sub>
+</p>
+
 ---
 
 ## Pourquoi UltraMusic ?
@@ -69,15 +74,18 @@ annoncé avant des mesures reproductibles.
 - Le runtime **[Microsoft Edge WebView2 Evergreen](https://developer.microsoft.com/microsoft-edge/webview2/)** installé.
 - Une connexion Internet et un compte/abonnement lorsque le service le demande.
 
-### Récupérer un build
+### Télécharger et lancer
 
-1. Ouvrir [GitHub Actions → Windows](https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml).
-2. Choisir une exécution **réussie** de la branche `main`.
-3. Télécharger l’artefact **`UltraMusic-windows-x64`** en bas de la page. GitHub peut demander une connexion.
-4. Extraire l’archive et lancer `target/release/ultramusic.exe`.
+1. **[Télécharger UltraMusic pour Windows](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic-windows-x64.zip)**.
+2. Extraire tous les fichiers du ZIP dans un dossier.
+3. Double-cliquer sur **`UltraMusic.exe`**.
 
-Les artefacts CI sont des builds du prototype, pas des releases stables. Si aucun
-artefact n’est disponible ou s’il a expiré, [compiler depuis les sources](#compilation).
+Aucune compilation et aucun compte GitHub ne sont nécessaires. Le fichier
+`LIRE-MOI.txt` accompagne le lecteur. Il s'agit d'une **préversion prototype** ;
+retrouver ses détails sur la [page de téléchargement](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.1.0).
+
+Les builds de développement restent disponibles dans
+[GitHub Actions](https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml).
 
 ## Utilisation
 
