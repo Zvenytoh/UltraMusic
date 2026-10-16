@@ -1,47 +1,31 @@
-# UltraMusic — Continuous sound
+# UltraMusic visual identity
 
-Nouvelle direction : un monogramme U composé de deux rubans dont l’espace
-négatif forme une onde continue. Palette bleu-vert et pervenche.
+The red **Pulse cut** mark combines a U-shaped ribbon with a diagonal negative-space
+cut. Angled upper terminals and a rounded base give the silhouette a sense of
+rhythm while keeping it readable at notification-icon sizes.
 
-Fichier maître : `assets/logo-master.png`, image raster avec canal alpha, générée avec
-l’outil imagegen intégré. Il ne s’agit pas d’un SVG ni d’une source vectorielle.
-Le logo est intégré au README, à sa bannière, au fichier exécutable et à la zone de notification Windows.
+The palette uses crimson red with a deeper red fold. Artwork was generated with
+the built-in imagegen tool and inspected on light and dark backgrounds at 16,
+32, 64 and 128 pixels. The master is a transparent raster image, not a vector file.
 
-## Fichiers distribués
-
-| Fichier | Utilisation |
+| Asset | Purpose |
 | --- | --- |
-| `assets/logo-master.png` | Source raster approuvée, transparence conservée |
-| `assets/logo.png` | Export carré de 1280 px avec marge pour la documentation |
-| `assets/ultramusic.ico` | Icône Windows, tailles de 16 à 256 px |
-| `assets/banner.png` | Bannière du README, 1280 × 400 px |
-| `assets/banner.svg` | Mise en page éditable de la bannière, avec logo raster incorporé |
+| `assets/logo-master.png` | Generated transparent source |
+| `assets/logo.png` | Square export with clear space for documentation |
+| `assets/ultramusic.ico` | Multi-resolution Windows and installer icon, 16–256 px |
+| `assets/banner.png` | Optional wide presentation export |
+| `assets/banner.svg` | Editable banner layout with the raster logo embedded |
 
-Le signe est généré avec imagegen et n'est pas une source vectorielle. Les
-exports conservent sa géométrie et sa palette. La bannière SVG combine texte et
-formes vectoriels avec une image PNG ; elle ne vectorise pas le logo.
+The banner is kept as an optional asset; the README uses the compact logo.
+The same icon is embedded into the application and setup executable.
 
-L'icône est incorporée à l'exécutable par `build.rs` via `winresource`, uniquement
-pendant la compilation. Fenêtre et zone de notification réutilisent la même
-ressource Windows partagée, sans lecture d'image ou traitement périodique.
-
-## Prompt initial
+## Generation brief
 
 ```text
 Use case: logo-brand.
-Create one finished premium brand symbol for UltraMusic, a lightweight native Windows music player whose philosophy is "Keep the audio. Stop the unnecessary work."
-Design concept: "continuous sound": a distinctive bold U monogram formed from two interlocking, smoothly flowing bands, subtly suggesting an audio wave through carefully shaped negative space. A compact memorable silhouette, deliberate asymmetry and excellent optical balance. Think refined independent software brand, precise Swiss design sensibility, not a generic music app stock icon.
-Deliverable: ONLY the symbol, centered on a truly transparent square canvas, generous consistent 15% clear space. No lettering, no wordmark, no slogan, no labels, no presentation sheet.
-Geometry: front-facing flat 2D vector-like artwork, smooth intentional curves, substantial weight, wide open negative space that remains legible at small sizes. Limit to two clean solid colors: deep saturated teal #087F8C and vivid periwinkle #6866E8. The form should still work as a single-color silhouette. Crisp edges.
-Avoid headphones, play triangles, musical notes, equalizer bars, rounded-square app tile background, decorative rings, thin strokes, gradients, gloss, shadows, 3D, mockups, textures, watermarks, or any borrowed recognizable brand symbol.
-Make the mark feel authored and elegant, with the visual flow of a continuous listening experience rather than a collection of music-related pictograms.
-```
-
-## Instruction de raffinement
-
-```text
-Refine this exact UltraMusic logo for a clean master asset. Preserve the U silhouette, the two flowing interlocking bands, positions, proportions, and curved negative-space wave. Do not redesign the mark.
-Clean every contour: remove stray blue/colored pixels, flecks, rough edge artifacts, tiny protrusions, and edge halos, especially on the inside left edge of the violet upper-right stroke and above its top. Make all curves impeccably smooth, antialiased, deliberate.
-Replace subtle gradient/noise shading with perfectly flat solid fills: teal #087F8C and periwinkle #6866E8. Keep all open spaces and surrounding background genuinely transparent, no solid matte, no checkerboard baked in.
-Keep the same square composition and padding, no text, no shadows, no mockup, no background, no extra elements.
+Design one final, distinctive premium brand symbol for UltraMusic, a lightweight native Windows music application. This is a new art direction, not a recoloring of a previous headphones or wave logo.
+Concept "Pulse cut": a compact monogram U built as a single confident sculptural red ribbon, with a sharply controlled diagonal negative-space cut suggesting rhythm and forward motion. Balance a warm rounded bottom with clean precise angled upper terminals. Create a clever, ownable geometric silhouette that reads as U at 24px. Authored identity for serious independent audio software, restrained Swiss graphic design, exceptional optical balance.
+Only the symbol centered on a genuinely transparent square canvas, ~14% clear margins. No lettering, words, labels, presentation sheet or slogan.
+Flat 2D vector-like master artwork. Main color vivid crimson #E32636, optional second deeper red #AC1028 confined to a simple purposeful overlapping portion of the ribbon; maximum two flat red tones. Solid clean fills, impeccably smooth contours, no gradient, no grain. Strong enough to work as a single-color silhouette.
+Avoid headphones, musical notes, equalizer bars, play triangles, standard rounded-square app tile, decorative rings, thin details, tiny gaps, 3D, shadows, gloss, textures, watermarks, and recognizable existing brand symbols. Do not make a generic horseshoe magnet; the deliberate diagonal ribbon cut must provide a memorable musical sense of flow.
 ```

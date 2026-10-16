@@ -4,9 +4,11 @@
 
 mod config;
 mod native;
+mod update;
 
 fn main() -> std::process::ExitCode {
-    if let Err(error) = native::run() {
+    let result = update::install::run_helper().unwrap_or_else(native::run);
+    if let Err(error) = result {
         native::show_error(&error);
         return std::process::ExitCode::FAILURE;
     }

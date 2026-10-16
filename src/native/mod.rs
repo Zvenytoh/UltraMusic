@@ -2,7 +2,10 @@
 //! Child modules never hold a RefCell borrow across a Win32/COM call.
 
 mod instance;
+mod media;
+mod theme;
 mod tray;
+mod updates;
 mod webview;
 mod window;
 
@@ -39,6 +42,8 @@ const TRAY: u32 = WM_APP + 1;
 const RESTORE: u32 = WM_APP + 2;
 const FAILED: u32 = WM_APP + 3;
 const EXTERNAL: u32 = WM_APP + 4;
+const UPDATE_READY: u32 = WM_APP + 5;
+const MEDIA_FAILED: u32 = WM_APP + 6;
 
 thread_local! { static APP: RefCell<Option<Rc<App>>> = const { RefCell::new(None) }; }
 struct App {
@@ -54,6 +59,11 @@ struct App {
     taskbar_created: u32,
     external: RefCell<Option<String>>,
     failed: Cell<bool>,
+    update_busy: Cell<bool>,
+    volume: Cell<f32>,
+    muted: Cell<bool>,
+    update_manual: Cell<bool>,
+    update_receiver: RefCell<Option<std::sync::mpsc::Receiver<updates::Event>>>,
 }
 fn app() -> Option<Rc<App>> {
     APP.with(|a| a.borrow().clone())
@@ -91,6 +101,7 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             .join("UltraMusic")
             .join("WebView2");
         std::fs::create_dir_all(&profile).map_err(|e| e.to_string())?;
+        let audio_preferences = media::Preferences::load();
         CoInitializeEx(None, COINIT_APARTMENTTHREADED)
             .ok()
             .map_err(|e| e.to_string())?;
@@ -126,6 +137,7 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             None,
         )
         .map_err(|e| e.to_string())?;
+        theme::apply(hwnd);
         let state = Rc::new(App {
             hwnd,
             icon,
@@ -139,6 +151,11 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             taskbar_created: RegisterWindowMessageW(w!("TaskbarCreated")),
             external: RefCell::new(None),
             failed: Cell::new(false),
+            update_busy: Cell::new(false),
+            volume: Cell::new(audio_preferences.volume),
+            muted: Cell::new(audio_preferences.muted),
+            update_manual: Cell::new(false),
+            update_receiver: RefCell::new(None),
         });
         APP.with(|a| *a.borrow_mut() = Some(state.clone()));
         state.add_tray();
@@ -146,6 +163,7 @@ pub(crate) fn run() -> std::result::Result<(), String> {
         if state.start().is_err() {
             state.report_failure();
         }
+        state.check_updates(false);
         let mut msg = MSG::default();
         let outcome = loop {
             match GetMessageW(&mut msg, None, 0, 0).0 {

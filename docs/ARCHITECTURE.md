@@ -19,7 +19,8 @@ src/
 `App` est privé au module natif. Ses modules enfants partagent son état ; leurs
 méthodes sont limitées à `pub(super)` lorsqu’un autre module doit les appeler.
 `Rc`, `Cell` et `RefCell` sont intentionnels : tous les accès ont lieu sur le
-thread UI initialisé en apartment COM STA, sans thread de travail ni verrou.
+thread UI initialisé en apartment COM STA. Les opérations de mise à jour utilisent
+des workers temporaires qui ne reçoivent aucune référence COM ou à `App`.
 Les emprunts de `RefCell` sont terminés avant les appels Win32/COM, qui peuvent
 réentrer dans la boucle de messages. Le contrôleur est cloné avant utilisation.
 
@@ -66,12 +67,45 @@ d’authentification ou des politiques du service n’est effectué.
 
 - Noms Rust en `snake_case`, types en `PascalCase`, constantes en `SCREAMING_SNAKE_CASE`.
 - Formatage standard `rustfmt`, sans règles stylistiques personnalisées.
-- Les appels natifs `unsafe` restent dans `native/`. Les préconditions sont
+- Les appels natifs `unsafe` restent dans `native/` et le transport/installateur
+  de `update/`. Les préconditions sont
   documentées près des frontières FFI ; `unsafe_op_in_unsafe_fn` est interdit.
 - Les modules documentent leur rôle ; les commentaires expliquent les invariants
   et contraintes du moteur plutôt que de reformuler chaque instruction.
 - Aucun `unwrap` ou `expect` dans le code de production. Les erreurs de démarrage
   remontent au point d’entrée et les erreurs asynchrones passent par Win32.
 
-Le statut de prototype et les limites audio/authentification restent décrits
-dans le README et le protocole de validation.
+Les contraintes des services musicaux restent décrites dans le README.
+
+## Version 0.2 : audio, mises à jour et installation
+
+`native/theme.rs` applique les attributs DWM de la barre noire. `native/media.rs`
+gère les commandes ponctuelles du menu de notification : mute natif WebView2,
+volume WASAPI limité aux sessions du processus navigateur et de ses descendants,
+et lecture/pause via une évaluation ponctuelle des éléments média accessibles.
+Les promesses de lecture sont attendues avec un geste utilisateur ; aucun script
+de contrôle permanent n'est installé dans les pages.
+
+`native/updates.rs` reçoit des résultats par canal et message Win32. Le transport
+WinHTTP et le hachage SHA-256 restent dans des workers temporaires de `update/`.
+Les boîtes de dialogue gardent l'opération occupée pour empêcher les vérifications
+réentrantes. Une vérification a lieu au démarrage ; les échecs réseau de ce contrôle
+initial restent silencieux. La commande manuelle affiche les erreurs éventuelles.
+
+Seules les releases publiques non brouillon et non préversion sont éligibles.
+Le tag est comparé avec SemVer, l'asset doit s'appeler `UltraMusic-Setup.exe` et
+provenir de ce dépôt. HTTPS, les hôtes de redirection, la taille et le digest
+GitHub sont contrôlés. Les réponses JSON et binaires sont bornées à 2 et 128 Mio.
+
+Après confirmation, un helper temporaire attend la fin du lecteur pendant au
+plus 30 secondes, sans polling. Il vérifie à nouveau le digest, sauvegarde le
+lecteur, exécute l'installeur silencieux puis relance le service choisi. En cas
+d'échec détecté de l'installation ou du lancement, il tente de restaurer l'ancien
+exécutable. Cela ne constitue pas une détection des défaillances ultérieures de
+l'application ni un rollback complet du registre de l'installeur.
+
+`installer/UltraMusic.iss` installe dans le dossier Programs de l'utilisateur,
+enregistre la désinstallation et ajoute les raccourcis. Son AppId reste constant
+entre versions. Il installe WebView2 si aucune installation existante n'est détectée.
+Le script de build vérifie la signature Microsoft du bootstrapper embarqué.
+La désinstallation conserve volontairement les cookies et données de session.

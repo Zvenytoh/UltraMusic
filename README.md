@@ -1,277 +1,193 @@
-<h1 align="center">UltraMusic</h1>
-
-<p align="center">
-  Un lecteur musical Windows natif, pensé pour rester discret en arrière-plan.<br>
-  <strong>Rust · Win32 · Microsoft Edge WebView2</strong>
-</p>
-
-<p align="center">
-  <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Build Windows"></a>
-  <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-stable-DEA584?logo=rust&amp;logoColor=white" alt="Rust stable"></a>
-  <a href="#installation"><img src="https://img.shields.io/badge/Windows-11%20x64-0078D4" alt="Windows 11 x64"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/Licence-MIT-63E6DA" alt="Licence MIT"></a>
-  <a href="#statut-du-projet"><img src="https://img.shields.io/badge/Statut-prototype-829CFF" alt="Statut : prototype"></a>
-</p>
-
-<p align="center">
-  <a href="#installation">Installation</a> ·
-  <a href="#utilisation">Utilisation</a> ·
-  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
-  <a href="CONTRIBUTING.md">Contribuer</a> ·
-  <a href="https://github.com/Zvenytoh/UltraMusic/issues">Signaler un problème</a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic.exe"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger_pour_Windows-11_x64-6866E8?style=for-the-badge" alt="Télécharger UltraMusic pour Windows 11 x64"></a><br>
-  <sub>Un seul fichier .exe · Version 0.1.0 prototype · Sans compte GitHub</sub>
-</p>
+<div align="center">
+  <img src="assets/logo.png" width="112" height="112" alt="UltraMusic logo">
+  <h1>UltraMusic</h1>
+  <p><strong>Your music. A native Windows home.</strong></p>
+  <p>Apple Music and YouTube Music in a focused desktop player.</p>
+  <p>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.0/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+  </p>
+  <p>Windows 11 · x64 · Version 0.2.0</p>
+  <p>
+    <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
+    <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-E32636" alt="MIT license"></a>
+  </p>
+  <p>
+    <a href="#installation">Installation</a> ·
+    <a href="#everyday-controls">Controls</a> ·
+    <a href="#updates">Updates</a> ·
+    <a href="CONTRIBUTING.md">Contributing</a> ·
+    <a href="https://github.com/Zvenytoh/UltraMusic/issues">Support</a>
+  </p>
+</div>
 
 ---
 
-## Pourquoi UltraMusic ?
+## Music, with less in the way
 
-Écouter sa musique ne devrait pas nécessiter une interface supplémentaire pleine
-d’animations. UltraMusic héberge directement le site officiel de **YouTube Music**
-ou d’**Apple Music** dans une fenêtre native Windows, avec une seule WebView et un
-profil persistant.
+UltraMusic brings the official Apple Music and YouTube Music websites into a
+native Windows application. Sign in to your provider, open your library and
+keep listening while the window is tucked away in the notification area.
 
-Le principe est simple : conserver le lecteur, masquer l’interface lorsqu’elle
-n’est plus utile, et éviter le travail périodique du wrapper. Le moteur WebView2
-installé sur Windows est réutilisé ; aucun moteur Chromium n’est embarqué dans
-le dépôt ou la distribution de l’application.
+The host is written in **Rust**, uses **Win32** for its window and tray menu,
+and runs the music service through **Microsoft Edge WebView2**. It shares the
+installed WebView2 runtime rather than shipping a separate browser engine.
 
-> **Keep the audio. Stop the unnecessary work.**
->
-> Il s’agit d’un objectif de conception : les gains CPU/GPU restent à mesurer.
+**Keep the audio. Stop the unnecessary work.**
 
-## Statut du projet
+## Features
 
-**Version 0.1.0 — prototype, pas encore un MVP entièrement validé.**
-
-Le code compile et fait l’objet de contrôles statiques. La connexion aux services,
-les DRM, la continuité audio en arrière-plan et les commandes multimédias doivent
-encore être vérifiés sur des comptes réels. Aucun chiffre de performance n’est
-annoncé avant des mesures reproductibles.
-
-| Présent dans le code | À valider ou à développer |
-| :--- | :--- |
-| Fenêtre native Win32 et WebView2 | Connexion et DRM de chaque service |
-| Fermeture et minimisation vers la zone de notification | Lecture prolongée et changements de piste en arrière-plan |
-| Restauration de la même WebView, sans rechargement demandé | Comportement des touches multimédias et SMTC |
-| Profil local persistant et instance unique | Comparaison CPU/GPU avec Edge PWA, Tauri et Electron |
-| Masquage du contrôleur et mode de compatibilité | Validation sur différentes machines et versions du runtime |
-| Redémarrage manuel du lecteur et filtrage des liens | Intégration système supplémentaire, selon son coût mesuré |
+- **Native desktop experience** — a black title bar, red application identity,
+  Start menu shortcut and standard Windows uninstall entry.
+- **Background listening** — close or minimize the window to keep the player
+  available in the notification area.
+- **Controls within reach** — play/pause, application volume and mute from the
+  tray menu, without bringing the player window forward.
+- **Persistent sign-in** — the same local WebView2 profile is reused between sessions.
+- **One active instance** — opening UltraMusic again restores the existing window.
+- **In-app updates** — a startup check, explicit installation confirmation and
+  verified downloads from this repository's releases.
+- **Focused architecture** — an event-driven message loop, with no periodic song
+  polling, animated overlay or custom frontend framework.
 
 ## Installation
 
-### Prérequis
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.0/UltraMusic-Setup.exe)**.
+2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
+3. Open **UltraMusic** from the Start menu.
 
-- **Windows 11 x64** pour la plateforme initiale visée.
-- Le runtime **[Microsoft Edge WebView2 Evergreen](https://developer.microsoft.com/microsoft-edge/webview2/)** installé.
-- Une connexion Internet et un compte/abonnement lorsque le service le demande.
+Setup installs the application for your Windows account. A desktop shortcut is
+optional. If Microsoft Edge WebView2 is missing, setup installs its Evergreen
+runtime using Microsoft's bootstrapper. An Internet connection is required.
 
-### Télécharger et lancer
+Remove the application through **Windows Settings → Apps → Installed apps**.
+Your music service session data is kept separately from the program files.
 
-1. **[Télécharger UltraMusic.exe](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic.exe)**.
-2. Double-cliquer sur le fichier téléchargé.
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.2.0)
 
-Aucune archive à extraire, aucune compilation et aucun compte GitHub ne sont
-nécessaires. Le logo, le loader WebView2 et le runtime C sont incorporés au
-build MSVC distribué. Il s'agit d'une **préversion prototype** ;
-retrouver ses détails sur la [page de téléchargement](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.1.0).
+## Everyday controls
 
-Les builds de développement restent disponibles dans
-[GitHub Actions](https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml).
+Right-click the UltraMusic icon in the Windows notification area:
 
-## Utilisation
+| Control | Action |
+| :--- | :--- |
+| Open UltraMusic | Restore the existing player window |
+| Play / Pause | Toggle playback on the service's accessible media player |
+| Mute | Mute or unmute the WebView's audio |
+| Volume −10% / +10% | Adjust UltraMusic's audio sessions, rather than system master volume |
+| Check for updates | Request an additional update check |
+| Restart player | Recreate the WebView while retaining the local profile |
+| Compatibility: keep rendering | Keep the WebView controller visible while its parent is hidden |
+| Quit | Stop the player and close the application |
+
+Double-click the tray icon to restore the window. UltraMusic must remain running
+in the notification area for background audio and tray controls to work.
+Playback commands depend on the media elements exposed by the provider's page;
+mute and volume use WebView2 and Windows audio interfaces respectively.
+Your volume and mute preferences are remembered between launches.
+
+## Choose your service
+
+YouTube Music is the default. Launch the installed executable with `--apple`
+to use Apple Music, or put that option in a shortcut's arguments.
 
 ```powershell
-# YouTube Music, service par défaut
-.\ultramusic.exe
+# Apple Music
+& "$env:LOCALAPPDATA\Programs\UltraMusic\UltraMusic.exe" --apple
 
-# Apple Music — compatibilité du service à valider
-.\ultramusic.exe --apple
-
-# Mode de compatibilité : ne pas masquer explicitement le contrôleur WebView2
-.\ultramusic.exe --keep-rendering
-
-# Les options peuvent se combiner
-.\ultramusic.exe --apple --keep-rendering
+# Keep rendering enabled when the window is hidden
+& "$env:LOCALAPPDATA\Programs\UltraMusic\UltraMusic.exe" --keep-rendering
 ```
 
-| Action | Comportement du wrapper |
-| :--- | :--- |
-| Cliquer sur la croix ou minimiser | Masque la fenêtre dans la zone de notification |
-| Double-cliquer sur l’icône | Restaure la fenêtre et la WebView existante |
-| Relancer UltraMusic | Demande la restauration de l’instance déjà ouverte |
-| Clic droit → **Redémarrer le lecteur** | Recrée la WebView après confirmation ; interrompt la lecture |
-| Clic droit → **Compatibilité : conserver le rendu** | Bascule le traitement du rendu lorsque la fenêtre est masquée |
-| Clic droit → **Quitter** | Ferme le contrôleur et termine le wrapper |
+Quit the active instance before changing services. A second launch restores
+that instance instead of changing its provider. Sign-in, subscriptions, DRM
+and available playback features are managed by the music service.
 
-Pour changer de service, **quitter complètement** UltraMusic puis le relancer avec
-l’option souhaitée. Un second lancement ne change pas le service de l’instance
-existante. Le réglage de compatibilité du menu n’est pas conservé après la sortie ;
-utiliser `--keep-rendering` pour l’activer dès le démarrage.
+## Updates
 
-## Ce que fait le mode arrière-plan
+UltraMusic checks published releases once when it starts. If a newer compatible
+version is available, it asks before downloading and installing it. You can also
+check manually from the tray menu.
 
-```text
-Fenêtre ouverte                 Croix / minimisation
-       │                                 │
-       ▼                                 ▼
-Interface visible               Fenêtre native masquée
-WebView2 actif                  Contrôleur masqué par défaut
-       ▲                        Aucune suspension de page
-       │                                 │
-       └──────── Double-clic sur l’icône ─┘
-```
+Downloads are restricted to the official repository and GitHub's delivery hosts.
+The installer size and SHA-256 digest are verified before it runs. After you
+confirm, UltraMusic downloads the update, closes the player, runs setup and
+restarts with the selected service and compatibility option. Playback is
+interrupted during installation; the service profile is preserved.
 
-UltraMusic utilise `IsVisible = false` sur le contrôleur WebView2, sauf en mode
-compatibilité. [Microsoft documente ce comportement](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2controller.isvisible),
-mais il ne garantit pas une activité GPU nulle : les sites peuvent continuer leur
-JavaScript, leur réseau et le traitement multimédia.
+There is no recurring background update timer. Temporary update files and the
+previous executable are stored under `%LOCALAPPDATA%\UltraMusic\Updates`.
 
-- Aucune boucle active ni timer périodique dans le lecteur Rust.
-- Aucun polling du morceau, script permanent, effet CSS injecté ou visualiseur.
-- Aucune suspension automatique, même quand le lecteur est en pause.
-- Accélération matérielle laissée au réglage du runtime.
-- Aucun redémarrage automatique susceptible de créer une boucle de crash.
+## Background behavior
 
-L’attente de cinq secondes maximum d’un **second processus au démarrage** sert
-uniquement à retrouver la première fenêtre. Elle n’ajoute pas de polling au lecteur.
+When hidden, UltraMusic hides the native window and normally sets the WebView2
+controller's visibility to false. The compatibility option keeps the controller
+visible. The page is never suspended automatically, and hardware acceleration
+keeps the runtime's default configuration.
 
-## Compilation
+The music provider still performs its own JavaScript, network and media work.
+UltraMusic avoids adding continuous polling or rendering work in its host process;
+actual resource usage depends on the provider and the runtime.
 
-Installer Rust stable avec la cible MSVC, Visual Studio Build Tools avec
-**Développement Desktop en C++**, et le SDK Windows.
+## Privacy
+
+- Authentication takes place on the official service pages.
+- The Rust host does not collect or handle your passwords.
+- Cookies and site data stay in `%LOCALAPPDATA%\UltraMusic\WebView2`.
+- No custom analytics or application log files are produced by the host.
+- Remote pages have no Rust host objects or native message bridge.
+- External HTTPS links opened by the user require confirmation.
+- Update checks contact the public GitHub API; downloads use GitHub delivery hosts.
+
+To reset a service session, quit UltraMusic and remove only its `WebView2`
+profile folder. Music providers, WebView2 and the Microsoft runtime installer
+operate under their own privacy policies.
+
+## Build from source
+
+Requirements: Rust stable, the MSVC C++ build tools, a Windows SDK and Windows 11
+x64. Building the installer additionally requires **Inno Setup 6**.
 
 ```powershell
 git clone https://github.com/Zvenytoh/UltraMusic.git
 cd UltraMusic
-
 cargo build --release --locked
 .\target\release\ultramusic.exe
+
+# Build the Windows installer
+.\scripts\build-installer.ps1
 ```
 
-### Contrôles de qualité
-
-```powershell
-cargo fmt --all -- --check
-cargo check --locked
-cargo clippy --locked --all-targets -- -D warnings
-cargo build --release --locked
-```
-
-La CI exécute le contrôle de formatage, Clippy et le build Windows MSVC.
-**Aucun test unitaire n’est présent ni exécuté.** Le script fonctionnel
-`scripts/smoke.ps1` est conservé pour des vérifications explicitement demandées ;
-il n’est pas lancé par la CI et ne valide pas la lecture musicale.
-
-<details>
-<summary><strong>Outillage GNU local et scripts PowerShell</strong></summary>
-
-Le script `./scripts/dev.ps1` accepte `check`, `fmt`, `clippy` et `build`. Il utilise
-l’outillage local dans `.tools/` lorsqu’il existe, sinon Rust installé sur le système.
-Ce dossier d’outils n’est pas distribué dans le dépôt.
-
-```powershell
-./scripts/dev.ps1 check
-./scripts/dev.ps1 clippy
-./scripts/dev.ps1 build
-```
-
-Pour le build GNU local, conserver **`WebView2Loader.dll` à côté de l’exécutable**.
-Le build MSVC de la CI utilise le loader lié statiquement. Les variables
-d’environnement modifiées par le script sont restaurées après son exécution.
-
-</details>
-
-## Organisation du code
+The MSVC target statically links the C runtime. The application icon and WebView2
+loader are embedded. GitHub Actions builds the app and installer, then publishes
+tagged versions to GitHub Releases.
 
 ```text
-UltraMusic/
-├── src/
-│   ├── main.rs            Point d’entrée
-│   ├── config.rs          Configuration et règles de navigation
-│   └── native/
-│       ├── mod.rs         État de l’application et boucle Win32
-│       ├── instance.rs    Instance unique et activation
-│       ├── webview.rs     Contrôleur et callbacks WebView2
-│       ├── window.rs      Fenêtre, messages et visibilité
-│       └── tray.rs        Icône de notification et menu
-├── assets/                Logo, bannière et icône Windows
-├── docs/                  Architecture, spécification et validation
-├── scripts/               Outils de développement
-└── .github/workflows/     Compilation et contrôles Windows
+src/
+├── main.rs             Entry point and update-helper dispatch
+├── config.rs           Service selection and navigation policy
+├── native/             Win32 window, WebView2, tray, theme and audio controls
+└── update/             Release discovery, HTTPS transport and setup coordination
+installer/              Windows installer definition
+assets/                 Application identity and icons
+docs/                   Architecture and design references
+scripts/                Development and packaging helpers
 ```
 
-Les objets COM restent sur le thread UI STA. Des gardes RAII gèrent les ressources
-natives, et une génération identifie chaque lecteur pour ignorer les callbacks et
-messages devenus obsolètes. Les responsabilités et invariants sont décrits dans
-[l’architecture](docs/ARCHITECTURE.md).
+See the [architecture](docs/ARCHITECTURE.md), [visual identity](docs/BRANDING.md)
+and [contribution guide](CONTRIBUTING.md) for implementation details.
 
-## Confidentialité et sécurité
+## Contributing and support
 
-- Authentification auprès des sites officiels ; Rust ne traite pas les mots de passe.
-- Profil WebView2 conservé localement dans `%LOCALAPPDATA%\UltraMusic\WebView2`.
-- Aucune télémétrie personnalisée ni journal applicatif écrit par le wrapper.
-- Aucun objet hôte Rust ni canal de messagerie natif exposé aux pages distantes.
-- Navigation principale limitée à des hôtes HTTPS explicites du service et de sa connexion.
-- Confirmation avant ouverture d’un lien externe HTTPS initié par l’utilisateur.
+Bug reports and focused contributions are welcome. Open an
+[issue](https://github.com/Zvenytoh/UltraMusic/issues) with your Windows version,
+music provider, UltraMusic version and the steps needed to reproduce the problem.
+Never include passwords, cookies or a copied WebView2 profile.
 
-Les services musicaux et WebView2 conservent leurs propres comportements réseau
-et politiques de confidentialité. UltraMusic ne modifie pas les flux protégés.
+## License
 
-<details>
-<summary><strong>Effacer la session locale</strong></summary>
+UltraMusic is released under the [MIT license](LICENSE). The original project
+artwork is included under the same license.
 
-Quitter UltraMusic depuis son icône et attendre la fermeture de ses processus
-WebView2. Supprimer ensuite **uniquement** `%LOCALAPPDATA%\UltraMusic\WebView2`
-dans l’Explorateur. Cela efface les cookies et données du profil partagé par les
-deux services et impose une nouvelle connexion.
-
-</details>
-
-## Limites connues
-
-- Les services peuvent refuser les navigateurs intégrés ou imposer des contraintes DRM.
-- Les popups autorisés sont redirigés dans la WebView unique. Une connexion qui exige
-  un popup distinct et `window.opener` peut échouer.
-- Le mode compatibilité conserve `IsVisible = true`, mais Windows et WebView2
-  peuvent encore détecter que la fenêtre parente est masquée.
-- Les touches multimédias dépendent actuellement du site et du runtime ; aucun
-  pont SMTC personnalisé n’est implémenté.
-- Une défaillance de sous-processus, même non critique, peut afficher une alerte.
-
-Voir le [protocole de validation](docs/VALIDATION.md) pour les essais audio,
-veille/reprise, restauration et benchmarks comparatifs à effectuer.
-
-## Documentation et contribution
-
-| Ressource | Contenu |
-| :--- | :--- |
-| [Identité visuelle](docs/BRANDING.md) | Logo, formats et utilisation |
-| [Architecture](docs/ARCHITECTURE.md) | Modules, durée de vie, événements et frontière de confiance |
-| [Spécification](docs/SPECIFICATION.md) | Objectifs et périmètre du projet |
-| [Validation](docs/VALIDATION.md) | Scénarios fonctionnels et protocole de mesure |
-| [Revue de publication](docs/REVIEW.md) | Corrections et contrôles réellement effectués |
-| [Historique du prototype](docs/BUILD-RESULTS.md) | Résultats antérieurs à la réorganisation |
-| [Contribuer](CONTRIBUTING.md) | Conventions et préparation des changements |
-| [Issues](https://github.com/Zvenytoh/UltraMusic/issues) | Bugs, retours et propositions |
-
-Pour signaler un problème, préciser la version de Windows, le service utilisé,
-le mode de rendu et les étapes de reproduction. Ne pas joindre de cookies,
-de mots de passe ni de profil WebView2.
-
-## Licence
-
-Distribué sous [licence MIT](LICENSE). Les visuels du projet sont
-couverts par cette même licence.
-
-UltraMusic est un projet indépendant, sans affiliation avec Apple, Google,
-YouTube ou Microsoft. Les noms des services appartiennent à leurs titulaires.
-
-<p align="center">
-  <img src="assets/logo.png" width="48" height="48" alt="Logo UltraMusic"><br>
-  <sub>Keep the audio. Stop the unnecessary work.</sub>
-</p>
+UltraMusic is independent of Apple, Google, YouTube and Microsoft. Service names
+and trademarks belong to their respective owners.

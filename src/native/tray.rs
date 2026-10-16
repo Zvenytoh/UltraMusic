@@ -19,6 +19,11 @@ const OPEN: usize = 1;
 const RESTART: usize = 2;
 const COMPAT: usize = 3;
 const QUIT: usize = 4;
+const UPDATE: usize = 5;
+const PLAY_PAUSE: usize = 6;
+const MUTE: usize = 7;
+const VOLUME_DOWN: usize = 8;
+const VOLUME_UP: usize = 9;
 impl App {
     fn tray_data(&self) -> NOTIFYICONDATAW {
         NOTIFYICONDATAW {
@@ -59,7 +64,33 @@ impl App {
         unsafe {
             let Ok(menu) = CreatePopupMenu() else { return };
             let _ = AppendMenuW(menu, MF_STRING, OPEN, w!("Ouvrir UltraMusic"));
+            let _ = AppendMenuW(menu, MF_STRING, PLAY_PAUSE, w!("Lecture / Pause"));
+            let mute_flag = if self.muted.get() {
+                MF_CHECKED
+            } else {
+                MF_UNCHECKED
+            };
+            let _ = AppendMenuW(menu, MF_STRING | mute_flag, MUTE, w!("Couper le son"));
+            let volume = windows::core::HSTRING::from(format!(
+                "Volume : {} %",
+                (self.volume.get() * 100.0).round() as u32
+            ));
+            let _ = AppendMenuW(menu, MF_STRING | MF_GRAYED, 0, &volume);
+            let _ = AppendMenuW(menu, MF_STRING, VOLUME_DOWN, w!("Volume −10 %"));
+            let _ = AppendMenuW(menu, MF_STRING, VOLUME_UP, w!("Volume +10 %"));
+            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
             let _ = AppendMenuW(menu, MF_STRING, RESTART, w!("Redémarrer le lecteur…"));
+            let update_flag = if self.update_busy.get() {
+                MF_GRAYED
+            } else {
+                MF_ENABLED
+            };
+            let update_label = if self.update_busy.get() {
+                w!("Mise à jour : opération en cours…")
+            } else {
+                w!("Vérifier les mises à jour…")
+            };
+            let _ = AppendMenuW(menu, MF_STRING | update_flag, UPDATE, update_label);
             let flag = if self.keep_rendering.get() {
                 MF_CHECKED
             } else {
@@ -89,6 +120,11 @@ impl App {
             let _ = DestroyMenu(menu);
             let _ = PostMessageW(Some(self.hwnd), WM_NULL, WPARAM(0), LPARAM(0));
             match command {
+                PLAY_PAUSE => self.play_pause(),
+                MUTE => self.toggle_mute(),
+                VOLUME_DOWN => self.set_volume(self.volume.get() - 0.1),
+                VOLUME_UP => self.set_volume(self.volume.get() + 0.1),
+                UPDATE => self.check_updates(true),
                 OPEN => self.restore(),
                 RESTART => {
                     let message = "Redémarrer le lecteur ? La lecture sera interrompue ; la session sera conservée.";

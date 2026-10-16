@@ -108,6 +108,7 @@ impl App {
             self.resize();
             controller.SetIsVisible(!self.hidden.get() || self.keep_rendering.get())?;
             let web = controller.CoreWebView2()?;
+            self.attach_media(&web, generation)?;
             let settings = web.Settings()?;
             settings.SetIsWebMessageEnabled(false)?;
             settings.SetAreHostObjectsAllowed(false)?;

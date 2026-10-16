@@ -1,6 +1,6 @@
 [package]
 name = "ultramusic"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "A minimal native Windows WebView2 music host"
@@ -13,10 +13,17 @@ categories = ["multimedia::audio"]
 winresource = "0.1.34"
 
 [dependencies]
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
 url = "2.5"
 webview2-com = "0.39.1"
 windows = { version = "0.62", features = [
-  "Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security",
+  "Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Security",
+  "Win32_Networking_WinHttp",
+  "Win32_Media_Audio", "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Com_StructuredStorage",
   "Win32_System_Com", "Win32_System_LibraryLoader", "Win32_System_Threading",
   "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"
 ] }

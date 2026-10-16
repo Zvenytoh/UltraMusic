@@ -1,0 +1,144 @@
+//! Verified setup launcher. A temporary helper waits for the player to exit.
+use super::{verify, Download};
+use std::{
+    ffi::{OsStr, OsString},
+    fs,
+    os::windows::process::CommandExt,
+    path::PathBuf,
+    process::Command,
+};
+use windows::Win32::{
+    Foundation::{CloseHandle, WAIT_OBJECT_0},
+    System::Threading::{OpenProcess, WaitForSingleObject, CREATE_NO_WINDOW, PROCESS_SYNCHRONIZE},
+};
+
+pub(crate) fn launch(download: Download, arguments: &[&str]) -> Result<(), String> {
+    let target = std::env::current_exe()
+        .and_then(fs::canonicalize)
+        .map_err(|e| e.to_string())?;
+    verify(&download.path, &download.digest)?;
+    let directory = download
+        .path
+        .parent()
+        .ok_or("Dossier de mise à jour absent.")?;
+    let helper = directory.join("installer-helper.exe");
+    fs::copy(&target, &helper).map_err(|_| "Impossible de préparer la mise à jour.")?;
+    if cfg!(target_env = "gnu") {
+        let loader = target
+            .parent()
+            .ok_or("Dossier du lecteur absent.")?
+            .join("WebView2Loader.dll");
+        fs::copy(loader, directory.join("WebView2Loader.dll")).map_err(|e| e.to_string())?;
+    }
+    Command::new(helper)
+        .arg("--apply-update")
+        .arg(std::process::id().to_string())
+        .arg(target)
+        .arg(download.path)
+        .arg(download.digest)
+        .args(arguments)
+        .creation_flags(CREATE_NO_WINDOW.0)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Runs before COM and the named instance mutex are initialized.
+pub(crate) fn run_helper() -> Option<Result<(), String>> {
+    let mut args = std::env::args_os().skip(1);
+    if args.next().as_deref() != Some(OsStr::new("--apply-update")) {
+        return None;
+    }
+    Some(apply(args.collect()))
+}
+
+fn apply(args: Vec<OsString>) -> Result<(), String> {
+    if args.len() < 4 {
+        return Err("Arguments de mise à jour incomplets.".into());
+    }
+    let parent: u32 = args[0]
+        .to_str()
+        .ok_or("PID invalide.")?
+        .parse()
+        .map_err(|_| "PID invalide.")?;
+    if parent == std::process::id() {
+        return Err("Processus de remplacement invalide.".into());
+    }
+    let target = PathBuf::from(&args[1]);
+    let source = fs::canonicalize(PathBuf::from(&args[2])).map_err(|e| e.to_string())?;
+    let helper = std::env::current_exe()
+        .and_then(fs::canonicalize)
+        .map_err(|e| e.to_string())?;
+    if !target.is_absolute()
+        || target
+            .extension()
+            .is_none_or(|ext| !ext.eq_ignore_ascii_case("exe"))
+        || source.parent() != helper.parent()
+        || source.file_name() != Some(OsStr::new("UltraMusic-Setup.exe"))
+        || target == source
+        || target == helper
+    {
+        return Err("Chemins de mise à jour invalides.".into());
+    }
+    let digest = args[3].to_str().ok_or("Empreinte invalide.")?;
+    let restart = &args[4..];
+    if restart.iter().any(|arg| {
+        !matches!(
+            arg.to_str(),
+            Some("--apple" | "--youtube" | "--keep-rendering")
+        )
+    }) {
+        return Err("Options de redémarrage invalides.".into());
+    }
+    verify(&source, digest)?;
+    wait_for_parent(parent)?;
+    let directory = target.parent().ok_or("Dossier de destination invalide.")?;
+    let backup = source
+        .parent()
+        .ok_or("Dossier de sauvegarde absent.")?
+        .join("UltraMusic.previous.exe");
+    fs::copy(&target, &backup)
+        .map_err(|_| "Impossible de sauvegarder le lecteur avant la mise à jour.")?;
+    let mut destination = OsString::from("/DIR=");
+    destination.push(directory);
+    let result = Command::new(&source)
+        .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+        .arg(destination)
+        .creation_flags(CREATE_NO_WINDOW.0)
+        .status();
+    let succeeded = result.as_ref().is_ok_and(|status| status.success()) && target.is_file();
+    if !succeeded {
+        fs::copy(&backup, &target)
+            .map_err(|_| format!("Restaurez le lecteur depuis {}", backup.display()))?;
+        let _ = Command::new(&target).args(restart).spawn();
+        return Err("L’installation n’a pas abouti. L’ancien lecteur a été restauré.".into());
+    }
+    if Command::new(&target).args(restart).spawn().is_err() {
+        fs::copy(&backup, &target)
+            .map_err(|_| format!("Restaurez le lecteur depuis {}", backup.display()))?;
+        let _ = Command::new(&target).args(restart).spawn();
+        return Err("Le redémarrage a échoué. L’ancien lecteur a été restauré.".into());
+    }
+    let _ = fs::remove_file(source);
+    Ok(())
+}
+
+fn wait_for_parent(pid: u32) -> Result<(), String> {
+    // SAFETY: this owns the process handle, waits without polling, and closes it.
+    unsafe {
+        match OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
+            Ok(handle) => {
+                let result = WaitForSingleObject(handle, 30_000);
+                let _ = CloseHandle(handle);
+                if result != WAIT_OBJECT_0 {
+                    return Err(
+                        "Le lecteur ne s’est pas fermé à temps. Mise à jour annulée.".into(),
+                    );
+                }
+            }
+            Err(error) if error.code().0 == 0x80070057_u32 as i32 => {}
+            Err(_) => return Err("Impossible d’attendre la fermeture du lecteur.".into()),
+        }
+    }
+    Ok(())
+}

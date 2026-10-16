@@ -1,5 +1,7 @@
 //! Native window transitions and dispatch. Modal UI runs outside COM callbacks.
-use super::{app, dialog, show_error, App, EXTERNAL, FAILED, RESTORE, TRAY};
+use super::{
+    app, dialog, show_error, App, EXTERNAL, FAILED, MEDIA_FAILED, RESTORE, TRAY, UPDATE_READY,
+};
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC;
 use windows::{
     core::{w, HSTRING},
@@ -80,6 +82,9 @@ pub(super) unsafe extern "system" fn window_proc(
             return LRESULT(0);
         }
         match msg {
+            MEDIA_FAILED if wp.0 == a.generation.get() => a.media_error(),
+            UPDATE_READY => a.update_event(),
+            WM_THEMECHANGED | WM_SETTINGCHANGE => super::theme::apply(hwnd),
             WM_QUERYENDSESSION => return LRESULT(1),
             WM_ENDSESSION => {
                 if wp.0 != 0 {
