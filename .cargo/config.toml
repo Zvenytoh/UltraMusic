@@ -1,0 +1,3 @@
+# Keep the Windows download self-contained apart from Windows and WebView2.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

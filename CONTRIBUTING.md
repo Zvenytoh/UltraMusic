@@ -4,11 +4,11 @@ Lire le [README](README.md) et l’[architecture](docs/ARCHITECTURE.md) avant de
 le lecteur. Utiliser Rust stable et, pour le build de référence, Windows x64 avec
 les outils C++ MSVC et le SDK Windows.
 
-Le script `scripts/package.ps1` prépare le ZIP portable avec `UltraMusic.exe` à
-la racine. Utiliser `-IncludeLoader` pour un build GNU local. La CI utilise MSVC
-et publie l'archive sur GitHub Releases lorsqu'un tag `v*` est poussé, après
-réussite des contrôles et de la compilation. Les versions actuelles sont
-publiées comme préversions ; le README fournit un lien direct au ZIP public.
+La CI utilise MSVC et publie directement `UltraMusic.exe` sur GitHub Releases
+lorsqu'un tag `v*` est poussé, après réussite des contrôles et de la compilation.
+Le runtime C est lié statiquement via `.cargo/config.toml` ; le loader WebView2
+et l'icône sont également incorporés. Les versions actuelles sont publiées comme
+préversions ; le README fournit un lien direct au fichier exécutable public.
 
 ## Vérifications avant publication
 

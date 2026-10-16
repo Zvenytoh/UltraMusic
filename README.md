@@ -26,8 +26,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic-windows-x64.zip"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger_pour_Windows-11_x64-6866E8?style=for-the-badge" alt="Télécharger UltraMusic pour Windows 11 x64"></a><br>
-  <sub>ZIP portable · Version 0.1.0 prototype · Sans compte GitHub</sub>
+  <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic.exe"><img src="https://img.shields.io/badge/T%C3%A9l%C3%A9charger_pour_Windows-11_x64-6866E8?style=for-the-badge" alt="Télécharger UltraMusic pour Windows 11 x64"></a><br>
+  <sub>Un seul fichier .exe · Version 0.1.0 prototype · Sans compte GitHub</sub>
 </p>
 
 ---
@@ -76,12 +76,12 @@ annoncé avant des mesures reproductibles.
 
 ### Télécharger et lancer
 
-1. **[Télécharger UltraMusic pour Windows](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic-windows-x64.zip)**.
-2. Extraire tous les fichiers du ZIP dans un dossier.
-3. Double-cliquer sur **`UltraMusic.exe`**.
+1. **[Télécharger UltraMusic.exe](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.1.0/UltraMusic.exe)**.
+2. Double-cliquer sur le fichier téléchargé.
 
-Aucune compilation et aucun compte GitHub ne sont nécessaires. Le fichier
-`LIRE-MOI.txt` accompagne le lecteur. Il s'agit d'une **préversion prototype** ;
+Aucune archive à extraire, aucune compilation et aucun compte GitHub ne sont
+nécessaires. Le logo, le loader WebView2 et le runtime C sont incorporés au
+build MSVC distribué. Il s'agit d'une **préversion prototype** ;
 retrouver ses détails sur la [page de téléchargement](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.1.0).
 
 Les builds de développement restent disponibles dans
