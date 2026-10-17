@@ -101,17 +101,45 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
         .map_err(|_| "Impossible de sauvegarder le lecteur avant la mise à jour.")?;
     let mut destination = OsString::from("/DIR=");
     destination.push(directory);
+    let log = source
+        .parent()
+        .ok_or("Dossier du journal absent.")?
+        .join("installer.log");
+    let mut log_argument = OsString::from("/LOG=");
+    log_argument.push(&log);
     let result = Command::new(&source)
-        .args(["/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"])
+        // Keep Setup's progress and error dialogs visible; suppressing them made
+        // installation failures indistinguishable from a silent rollback.
+        .args(["/SILENT", "/NORESTART"])
         .arg(destination)
+        .arg(log_argument)
         .creation_flags(CREATE_NO_WINDOW.0)
         .status();
-    let succeeded = result.as_ref().is_ok_and(|status| status.success()) && target.is_file();
+    let failure = match &result {
+        Ok(status) if !status.success() => {
+            format!(
+                "L’installeur a renvoyé le code {}.",
+                status.code().unwrap_or(-1)
+            )
+        }
+        Err(error) => format!("L’installeur n’a pas pu démarrer : {error}"),
+        _ if !target.is_file() => "Le fichier du lecteur est absent après l’installation.".into(),
+        _ => String::new(),
+    };
+    let succeeded = failure.is_empty();
     if !succeeded {
         fs::copy(&backup, &target)
             .map_err(|_| format!("Restaurez le lecteur depuis {}", backup.display()))?;
-        let _ = Command::new(&target).args(restart).spawn();
-        return Err("L’installation n’a pas abouti. L’ancien lecteur a été restauré.".into());
+        let relaunched = Command::new(&target).args(restart).spawn();
+        let restart_status = if relaunched.is_ok() {
+            "L’ancien lecteur a été restauré et relancé."
+        } else {
+            "L’ancien lecteur a été restauré, mais son redémarrage a échoué."
+        };
+        return Err(format!(
+            "{failure}\n\n{restart_status}\nJournal : {}",
+            log.display()
+        ));
     }
     if Command::new(&target).args(restart).spawn().is_err() {
         fs::copy(&backup, &target)

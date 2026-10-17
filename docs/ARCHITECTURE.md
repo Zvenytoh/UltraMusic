@@ -112,7 +112,8 @@ GitHub sont contrôlés. Les réponses JSON et binaires sont bornées à 2 et 12
 
 Après confirmation, un helper temporaire attend la fin du lecteur pendant au
 plus 30 secondes, sans polling. Il vérifie à nouveau le digest, sauvegarde le
-lecteur, exécute l'installeur silencieux puis relance le service choisi. En cas
+lecteur, affiche la progression de l'installeur et conserve son journal dans le
+dossier de la mise à jour, puis relance le service choisi. En cas
 d'échec détecté de l'installation ou du lancement, il tente de restaurer l'ancien
 exécutable. Cela ne constitue pas une détection des défaillances ultérieures de
 l'application ni un rollback complet du registre de l'installeur.

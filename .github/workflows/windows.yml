@@ -59,6 +59,8 @@ jobs:
           - Black native title bar and new red brand identity.
           - Tray playback, application volume and mute controls.
           - Startup update checks with installation only after confirmation.
+          - Visible update installation progress, retained installer logs and
+            restored player launch when an update fails.
           - Verified installer downloads and preserved service sessions.
 
           Requires Windows 11 x64 and an Internet connection. Music service

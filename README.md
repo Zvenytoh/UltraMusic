@@ -4,9 +4,9 @@
   <p><strong>Your music. A native Windows home.</strong></p>
   <p>Apple Music and YouTube Music in a focused desktop player.</p>
   <p>
-    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.2/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.3/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
   </p>
-  <p>Windows 11 · x64 · Version 0.2.2</p>
+  <p>Windows 11 · x64 · Version 0.2.3</p>
   <p>
     <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
@@ -52,7 +52,7 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Installation
 
-1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.2/UltraMusic-Setup.exe)**.
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.3/UltraMusic-Setup.exe)**.
 2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
 3. Open **UltraMusic** from the Start menu.
 
@@ -63,7 +63,7 @@ runtime using Microsoft's bootstrapper. An Internet connection is required.
 Remove the application through **Windows Settings → Apps → Installed apps**.
 Your music service session data is kept separately from the program files.
 
-[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.2.2)
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.2.3)
 
 ## Everyday controls
 
