@@ -1,6 +1,6 @@
 [package]
 name = "ultramusic"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "MIT"
 description = "A minimal native Windows WebView2 music host"

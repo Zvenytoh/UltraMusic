@@ -98,6 +98,9 @@ de contrôle permanent n'est installé dans les pages.
 
 `native/updates.rs` reçoit des résultats par canal et message Win32. Le transport
 WinHTTP et le hachage SHA-256 restent dans des workers temporaires de `update/`.
+Si l’utilisateur demande un contrôle manuel pendant celui lancé au démarrage,
+cette demande transforme le résultat en retour visible et évite un second worker.
+L’entrée reste activable et indique qu’elle affichera le résultat pendant ce délai.
 Les boîtes de dialogue gardent l'opération occupée pour empêcher les vérifications
 réentrantes. Une vérification a lieu au démarrage ; les échecs réseau de ce contrôle
 initial restent silencieux. La commande manuelle affiche les erreurs éventuelles.

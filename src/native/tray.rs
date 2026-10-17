@@ -95,17 +95,12 @@ impl App {
             let _ = AppendMenuW(menu, MF_STRING, VOLUME_UP, w!("Volume +10 %"));
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
             let _ = AppendMenuW(menu, MF_STRING, RESTART, w!("Redémarrer le lecteur…"));
-            let update_flag = if self.update_busy.get() {
-                MF_GRAYED
-            } else {
-                MF_ENABLED
-            };
             let update_label = if self.update_busy.get() {
-                w!("Mise à jour : opération en cours…")
+                w!("Afficher le résultat de la vérification…")
             } else {
                 w!("Vérifier les mises à jour…")
             };
-            let _ = AppendMenuW(menu, MF_STRING | update_flag, UPDATE, update_label);
+            let _ = AppendMenuW(menu, MF_STRING, UPDATE, update_label);
             let flag = if self.keep_rendering.get() {
                 MF_CHECKED
             } else {

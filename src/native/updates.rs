@@ -21,6 +21,11 @@ pub(super) enum Event {
 impl App {
     pub(super) fn check_updates(&self, manual: bool) {
         if self.update_busy.get() {
+            // A startup check is silent, but a deliberate menu click should still
+            // make its result visible instead of being discarded.
+            if manual {
+                self.update_manual.set(true);
+            }
             return;
         }
         self.update_manual.set(manual);
