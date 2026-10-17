@@ -4,9 +4,9 @@
   <p><strong>Your music. A native Windows home.</strong></p>
   <p>Apple Music and YouTube Music in a focused desktop player.</p>
   <p>
-    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.0/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.1/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
   </p>
-  <p>Windows 11 · x64 · Version 0.2.0</p>
+  <p>Windows 11 · x64 · Version 0.2.1</p>
   <p>
     <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
@@ -52,7 +52,7 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Installation
 
-1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.0/UltraMusic-Setup.exe)**.
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.1/UltraMusic-Setup.exe)**.
 2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
 3. Open **UltraMusic** from the Start menu.
 
@@ -63,7 +63,7 @@ runtime using Microsoft's bootstrapper. An Internet connection is required.
 Remove the application through **Windows Settings → Apps → Installed apps**.
 Your music service session data is kept separately from the program files.
 
-[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.2.0)
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.2.1)
 
 ## Everyday controls
 
@@ -72,6 +72,7 @@ Right-click the UltraMusic icon in the Windows notification area:
 | Control | Action |
 | :--- | :--- |
 | Open UltraMusic | Restore the existing player window |
+| Apple Music / YouTube Music | Switch provider and remember the selection |
 | Play / Pause | Toggle playback on the service's accessible media player |
 | Mute | Mute or unmute the WebView's audio |
 | Volume −10% / +10% | Adjust UltraMusic's audio sessions, rather than system master volume |
@@ -88,8 +89,13 @@ Your volume and mute preferences are remembered between launches.
 
 ## Choose your service
 
-YouTube Music is the default. Launch the installed executable with `--apple`
-to use Apple Music, or put that option in a shortcut's arguments.
+Right-click the UltraMusic icon in the Windows notification area and choose
+**Apple Music** or **YouTube Music**. The selected service has a check mark and
+is remembered for future launches. Switching interrupts playback and opens the
+chosen service in the player window; your sign-in sessions are preserved.
+
+YouTube Music is used on first launch. Command-line options override the saved
+choice for that launch; select a service in the tray menu to save a new default.
 
 ```powershell
 # Apple Music
@@ -99,8 +105,8 @@ to use Apple Music, or put that option in a shortcut's arguments.
 & "$env:LOCALAPPDATA\Programs\UltraMusic\UltraMusic.exe" --keep-rendering
 ```
 
-Quit the active instance before changing services. A second launch restores
-that instance instead of changing its provider. Sign-in, subscriptions, DRM
+Quit the active instance before using a command-line override. A second launch
+restores that instance instead of changing its provider. Sign-in, subscriptions, DRM
 and available playback features are managed by the music service.
 
 ## Updates
@@ -134,6 +140,7 @@ actual resource usage depends on the provider and the runtime.
 - Authentication takes place on the official service pages.
 - The Rust host does not collect or handle your passwords.
 - Cookies and site data stay in `%LOCALAPPDATA%\UltraMusic\WebView2`.
+- The chosen service is saved locally in `%LOCALAPPDATA%\UltraMusic\service.txt`.
 - No custom analytics or application log files are produced by the host.
 - Remote pages have no Rust host objects or native message bridge.
 - External HTTPS links opened by the user require confirmation.

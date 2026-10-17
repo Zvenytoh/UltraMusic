@@ -9,6 +9,50 @@ pub enum Service {
 }
 
 impl Service {
+    fn preference_path() -> Option<std::path::PathBuf> {
+        std::env::var_os("LOCALAPPDATA").map(|root| {
+            std::path::PathBuf::from(root)
+                .join("UltraMusic")
+                .join("service.txt")
+        })
+    }
+
+    /// Missing or invalid preferences fall back to YouTube Music.
+    fn load() -> Self {
+        use std::io::Read;
+        let saved = (|| {
+            let mut value = String::new();
+            std::fs::File::open(Self::preference_path()?)
+                .ok()?
+                .take(32)
+                .read_to_string(&mut value)
+                .ok()?;
+            Some(value)
+        })();
+        match saved.as_deref() {
+            Some("apple\n") => Self::Apple,
+            _ => Self::Youtube,
+        }
+    }
+
+    /// Commit a complete preference file before replacing the previous value.
+    pub fn save(self) -> std::io::Result<()> {
+        let path = Self::preference_path()
+            .ok_or_else(|| std::io::Error::other("LOCALAPPDATA indisponible"))?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let temporary = path.with_extension("tmp");
+        std::fs::write(
+            &temporary,
+            match self {
+                Self::Apple => "apple\n",
+                Self::Youtube => "youtube\n",
+            },
+        )?;
+        std::fs::rename(temporary, path)
+    }
+
     pub fn home(self) -> &'static str {
         match self {
             Self::Youtube => "https://music.youtube.com/",
@@ -63,7 +107,7 @@ pub struct Config {
 impl Config {
     pub fn parse(args: impl Iterator<Item = String>) -> Result<Self, String> {
         let mut result = Self {
-            service: Service::Youtube,
+            service: Service::load(),
             keep_rendering: false,
         };
         for arg in args {

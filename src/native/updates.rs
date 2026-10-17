@@ -88,7 +88,7 @@ impl App {
             }
             Event::Checked(Err(error)) if self.update_manual.get() => self.update_error(&error),
             Event::Downloaded(Ok(download)) => {
-                let service = match self.config.service {
+                let service = match self.service.get() {
                     Service::Apple => "--apple",
                     Service::Youtube => "--youtube",
                 };

@@ -119,7 +119,7 @@ impl App {
                         let mut uri = PWSTR::null();
                         args.Uri(&mut uri)?;
                         let uri = CoTaskMemPWSTR::from(uri).to_string();
-                        if !a.config.service.allows(&uri) {
+                        if !a.service.get().allows(&uri) {
                             args.SetCancel(true)?;
                             let mut user = BOOL(0);
                             args.IsUserInitiated(&mut user)?;
@@ -143,7 +143,7 @@ impl App {
                             let mut user = BOOL(0);
                             args.IsUserInitiated(&mut user)?;
                             if user.as_bool() {
-                                if a.config.service.allows(&uri) {
+                                if a.service.get().allows(&uri) {
                                     if let Some(web) = sender {
                                         web.Navigate(&HSTRING::from(uri))?;
                                     }
@@ -166,7 +166,7 @@ impl App {
                 })),
                 &mut token,
             )?;
-            web.Navigate(&HSTRING::from(self.config.service.home()))?;
+            web.Navigate(&HSTRING::from(self.service.get().home()))?;
         }
         Ok(())
     }

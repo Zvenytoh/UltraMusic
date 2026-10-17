@@ -79,6 +79,16 @@ Les contraintes des services musicaux restent décrites dans le README.
 
 ## Version 0.2 : audio, mises à jour et installation
 
+`native/service.rs` traite le choix Apple Music / YouTube Music du menu de
+notification. Le service actif appartient à une `Cell<Service>` sur le thread UI.
+La préférence `service.txt` est remplacée après une écriture complète ; un échec
+d'écriture laisse le lecteur actuel intact. Au démarrage, une lecture bornée
+charge ce choix ; une préférence absente ou invalide utilise YouTube Music et les
+arguments explicites restent prioritaires pour ce lancement. Le changement ferme
+le contrôleur précédent et invalide sa génération avant de recréer le lecteur.
+Le profil, les réglages audio et l'option de rendu sont conservés ; la politique
+de navigation et la relance après mise à jour utilisent le service actif.
+
 `native/theme.rs` applique les attributs DWM de la barre noire. `native/media.rs`
 gère les commandes ponctuelles du menu de notification : mute natif WebView2,
 volume WASAPI limité aux sessions du processus navigateur et de ses descendants,

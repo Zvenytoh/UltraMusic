@@ -54,6 +54,8 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
+          - Switch between Apple Music and YouTube Music directly from the tray.
+          - Remembered service selection for future launches.
           - Black native title bar and new red brand identity.
           - Tray playback, application volume and mute controls.
           - Startup update checks with installation only after confirmation.

@@ -1,5 +1,6 @@
 //! Notification icon and its native popup menu; no timers or rendering loop.
 use super::{dialog, App, TRAY};
+use crate::config::Service;
 use std::mem::size_of;
 use windows::{
     core::w,
@@ -24,6 +25,8 @@ const PLAY_PAUSE: usize = 6;
 const MUTE: usize = 7;
 const VOLUME_DOWN: usize = 8;
 const VOLUME_UP: usize = 9;
+const YOUTUBE: usize = 10;
+const APPLE: usize = 11;
 impl App {
     fn tray_data(&self) -> NOTIFYICONDATAW {
         NOTIFYICONDATAW {
@@ -64,6 +67,18 @@ impl App {
         unsafe {
             let Ok(menu) = CreatePopupMenu() else { return };
             let _ = AppendMenuW(menu, MF_STRING, OPEN, w!("Ouvrir UltraMusic"));
+            for (command, service, label) in [
+                (YOUTUBE, Service::Youtube, w!("YouTube Music")),
+                (APPLE, Service::Apple, w!("Apple Music")),
+            ] {
+                let selected = if self.service.get() == service {
+                    MF_CHECKED
+                } else {
+                    MF_UNCHECKED
+                };
+                let _ = AppendMenuW(menu, MF_STRING | selected, command, label);
+            }
+            let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
             let _ = AppendMenuW(menu, MF_STRING, PLAY_PAUSE, w!("Lecture / Pause"));
             let mute_flag = if self.muted.get() {
                 MF_CHECKED
@@ -120,6 +135,8 @@ impl App {
             let _ = DestroyMenu(menu);
             let _ = PostMessageW(Some(self.hwnd), WM_NULL, WPARAM(0), LPARAM(0));
             match command {
+                YOUTUBE => self.select_service(Service::Youtube),
+                APPLE => self.select_service(Service::Apple),
                 PLAY_PAUSE => self.play_pause(),
                 MUTE => self.toggle_mute(),
                 VOLUME_DOWN => self.set_volume(self.volume.get() - 0.1),

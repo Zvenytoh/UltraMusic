@@ -3,6 +3,7 @@
 
 mod instance;
 mod media;
+mod service;
 mod theme;
 mod tray;
 mod updates;
@@ -11,7 +12,7 @@ mod window;
 
 use window::window_proc;
 
-use crate::config::Config;
+use crate::config::{Config, Service};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -49,7 +50,7 @@ thread_local! { static APP: RefCell<Option<Rc<App>>> = const { RefCell::new(None
 struct App {
     hwnd: HWND,
     icon: HICON,
-    config: Config,
+    service: Cell<Service>,
     profile: HSTRING,
     controller: RefCell<Option<ICoreWebView2Controller>>,
     generation: Cell<usize>,
@@ -142,7 +143,7 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             hwnd,
             icon,
             keep_rendering: Cell::new(config.keep_rendering),
-            config,
+            service: Cell::new(config.service),
             profile: HSTRING::from(profile.as_os_str()),
             controller: RefCell::new(None),
             generation: Cell::new(0),
