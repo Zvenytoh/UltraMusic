@@ -19,13 +19,19 @@ cargo fmt --all -- --check
 cargo check --locked
 cargo clippy --locked --all-targets -- -D warnings
 cargo build --release --locked
+.\scripts\audit.ps1
 ```
 
 La politique actuelle du projet ne comprend pas de tests unitaires. La CI ne
-lance que les contrôles statiques et la compilation. Le script `scripts/smoke.ps1`
+lance que l’audit des dépendances, les contrôles statiques et la compilation. Le script `scripts/smoke.ps1`
 reste disponible pour une validation fonctionnelle explicitement demandée ; il
 n’est pas exécuté par la CI. Les essais audio et benchmarks ont leur propre
 [protocole](docs/VALIDATION.md) et ne se déduisent pas d’un build réussi.
+
+Avec l’outillage local, utiliser `scripts/dev.ps1 audit` pour préparer
+l’environnement Cargo. Le script d’audit vérifie le SHA-256 de son outil RustSec
+avant exécution. La [revue de sécurité du 19 octobre 2026](docs/SECURITY-REVIEW-2026-10-19.md)
+décrit les contrôles réalisés et leurs limites.
 
 ## Règles de modification
 

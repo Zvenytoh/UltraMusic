@@ -3,14 +3,22 @@ use super::{current, App, EXTERNAL, FAILED};
 use crate::config::external_url;
 use webview2_com::{
     CoTaskMemPWSTR, CreateCoreWebView2ControllerCompletedHandler,
-    CreateCoreWebView2EnvironmentCompletedHandler,
+    CreateCoreWebView2EnvironmentCompletedHandler, DownloadStartingEventHandler,
     Microsoft::Web::WebView2::Win32::{
-        CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
+        CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller, ICoreWebView2_4,
+        COREWEBVIEW2_PERMISSION_KIND_CAMERA, COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ,
+        COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE, COREWEBVIEW2_PERMISSION_KIND_GEOLOCATION,
+        COREWEBVIEW2_PERMISSION_KIND_LOCAL_FONTS, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+        COREWEBVIEW2_PERMISSION_KIND_MIDI_SYSTEM_EXCLUSIVE_MESSAGES,
+        COREWEBVIEW2_PERMISSION_KIND_MULTIPLE_AUTOMATIC_DOWNLOADS,
+        COREWEBVIEW2_PERMISSION_KIND_NOTIFICATIONS, COREWEBVIEW2_PERMISSION_KIND_OTHER_SENSORS,
+        COREWEBVIEW2_PERMISSION_KIND_WINDOW_MANAGEMENT, COREWEBVIEW2_PERMISSION_STATE_DENY,
     },
-    NavigationStartingEventHandler, NewWindowRequestedEventHandler, ProcessFailedEventHandler,
+    NavigationStartingEventHandler, NewWindowRequestedEventHandler,
+    PermissionRequestedEventHandler, ProcessFailedEventHandler,
 };
 use windows::{
-    core::{Result as WinResult, BOOL, HSTRING, PWSTR},
+    core::{Interface, Result as WinResult, BOOL, HSTRING, PWSTR},
     Win32::{
         Foundation::{LPARAM, WPARAM},
         UI::WindowsAndMessaging::PostMessageW,
@@ -113,6 +121,44 @@ impl App {
             settings.SetIsWebMessageEnabled(false)?;
             settings.SetAreHostObjectsAllowed(false)?;
             let mut token = 0;
+            web.add_PermissionRequested(
+                &PermissionRequestedEventHandler::create(Box::new(move |_, args| {
+                    if let Some(args) = args {
+                        let mut kind = Default::default();
+                        args.PermissionKind(&mut kind)?;
+                        if matches!(
+                            kind,
+                            COREWEBVIEW2_PERMISSION_KIND_CAMERA
+                                | COREWEBVIEW2_PERMISSION_KIND_MICROPHONE
+                                | COREWEBVIEW2_PERMISSION_KIND_GEOLOCATION
+                                | COREWEBVIEW2_PERMISSION_KIND_NOTIFICATIONS
+                                | COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ
+                                | COREWEBVIEW2_PERMISSION_KIND_OTHER_SENSORS
+                                | COREWEBVIEW2_PERMISSION_KIND_MIDI_SYSTEM_EXCLUSIVE_MESSAGES
+                                | COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE
+                                | COREWEBVIEW2_PERMISSION_KIND_LOCAL_FONTS
+                                | COREWEBVIEW2_PERMISSION_KIND_WINDOW_MANAGEMENT
+                                | COREWEBVIEW2_PERMISSION_KIND_MULTIPLE_AUTOMATIC_DOWNLOADS
+                        ) {
+                            args.SetState(COREWEBVIEW2_PERMISSION_STATE_DENY)?;
+                        }
+                    }
+                    Ok(())
+                })),
+                &mut token,
+            )?;
+            // Streaming remains available; pages cannot save attachments through this host.
+            let downloads: ICoreWebView2_4 = web.cast()?;
+            downloads.add_DownloadStarting(
+                &DownloadStartingEventHandler::create(Box::new(move |_, args| {
+                    if let Some(args) = args {
+                        args.SetCancel(true)?;
+                        args.SetHandled(true)?;
+                    }
+                    Ok(())
+                })),
+                &mut token,
+            )?;
             web.add_NavigationStarting(
                 &NavigationStartingEventHandler::create(Box::new(move |_, args| {
                     if let (Some(a), Some(args)) = (current(generation), args) {

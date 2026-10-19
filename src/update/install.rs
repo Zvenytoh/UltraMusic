@@ -4,7 +4,7 @@ use std::{
     ffi::{OsStr, OsString},
     fs,
     os::windows::process::CommandExt,
-    path::PathBuf,
+    path::{Component, Path, PathBuf, Prefix},
     process::Command,
 };
 use windows::Win32::{
@@ -21,6 +21,9 @@ pub(crate) fn launch(download: Download, arguments: &[&str]) -> Result<(), Strin
         .path
         .parent()
         .ok_or("Dossier de mise à jour absent.")?;
+    // Reject unsupported paths while the original player is still available.
+    installer_path(&target)?;
+    installer_path(&fs::canonicalize(directory).map_err(|e| e.to_string())?)?;
     let helper = directory.join("installer-helper.exe");
     fs::copy(&target, &helper).map_err(|_| "Impossible de préparer la mise à jour.")?;
     if cfg!(target_env = "gnu") {
@@ -64,7 +67,7 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
     if parent == std::process::id() {
         return Err("Processus de remplacement invalide.".into());
     }
-    let target = PathBuf::from(&args[1]);
+    let target = fs::canonicalize(PathBuf::from(&args[1])).map_err(|e| e.to_string())?;
     let source = fs::canonicalize(PathBuf::from(&args[2])).map_err(|e| e.to_string())?;
     let helper = std::env::current_exe()
         .and_then(fs::canonicalize)
@@ -100,11 +103,12 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
     fs::copy(&target, &backup)
         .map_err(|_| "Impossible de sauvegarder le lecteur avant la mise à jour.")?;
     let mut destination = OsString::from("/DIR=");
-    destination.push(directory);
+    destination.push(installer_path(directory)?);
     let log = source
         .parent()
         .ok_or("Dossier du journal absent.")?
         .join("installer.log");
+    let log = installer_path(&log)?;
     let mut log_argument = OsString::from("/LOG=");
     log_argument.push(&log);
     let result = Command::new(&source)
@@ -149,6 +153,19 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
     }
     let _ = fs::remove_file(source);
     Ok(())
+}
+
+/// Inno Setup needs ordinary drive paths, not Rust's canonical `\\?\` form.
+fn installer_path(path: &Path) -> Result<PathBuf, String> {
+    let mut components = path.components();
+    if let Some(Component::Prefix(prefix)) = components.next() {
+        if let Prefix::Disk(drive) | Prefix::VerbatimDisk(drive) = prefix.kind() {
+            let mut plain = OsString::from(format!("{}:", char::from(drive)));
+            plain.push(components.as_path());
+            return Ok(PathBuf::from(plain));
+        }
+    }
+    Err("La mise à jour nécessite une installation sur un disque local.".into())
 }
 
 fn wait_for_parent(pid: u32) -> Result<(), String> {

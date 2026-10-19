@@ -4,7 +4,7 @@ Runs static checks or a release build with optional workspace-local tools.
 .DESCRIPTION
 Does not run tests. Restores the caller's environment after completion.
 #>
-param([ValidateSet('check', 'build', 'fmt', 'clippy')][string]$Task = 'build')
+param([ValidateSet('check', 'build', 'fmt', 'clippy', 'audit')][string]$Task = 'build')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $savedEnvironment = @{}
@@ -41,6 +41,7 @@ try {
         fmt { cargo fmt --all -- --check }
         clippy { cargo clippy --locked --all-targets -- -D warnings }
         check { cargo check --locked }
+        audit { & (Join-Path $PSScriptRoot 'audit.ps1') }
     }
     if ($LASTEXITCODE -ne 0) { throw "Cargo failed ($LASTEXITCODE)." }
     if ($Task -eq 'build' -and $localToolchain) {

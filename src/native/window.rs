@@ -130,13 +130,13 @@ pub(super) unsafe extern "system" fn window_proc(
             EXTERNAL if wp.0 == a.generation.get() => {
                 let uri = a.external.borrow_mut().take();
                 if let Some(uri) = uri {
-                    let host = url::Url::parse(&uri)
+                    let origin = url::Url::parse(&uri)
                         .ok()
-                        .and_then(|u| u.host_str().map(str::to_owned))
+                        .map(|u| u.origin().ascii_serialization())
                         .unwrap_or_default();
                     if dialog(
                         Some(hwnd),
-                        &format!("Ouvrir un lien vers {host} dans votre navigateur par défaut ?"),
+                        &format!("Ouvrir un lien vers {origin} dans votre navigateur par défaut ?"),
                         MB_YESNO | MB_ICONQUESTION,
                     ) == IDYES
                         && wp.0 == a.generation.get()

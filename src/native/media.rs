@@ -1,7 +1,7 @@
 //! On-demand media actions and application-scoped Windows audio sessions.
 use super::{current, dialog, App, MEDIA_FAILED};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, mem::size_of};
+use std::{collections::HashSet, io::Read, mem::size_of};
 use webview2_com::{
     CallDevToolsProtocolMethodCompletedHandler, IsDocumentPlayingAudioChangedEventHandler,
     Microsoft::Web::WebView2::Win32::{ICoreWebView2, ICoreWebView2_8},
@@ -32,10 +32,15 @@ impl Preferences {
     pub(super) fn load() -> Self {
         let value = (|| {
             let path = Self::path()?;
-            if std::fs::metadata(&path).ok()?.len() > 4096 {
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)
+                .ok()?
+                .take(4097)
+                .read_to_end(&mut bytes)
+                .ok()?;
+            if bytes.len() > 4096 {
                 return None;
             }
-            let bytes = std::fs::read(path).ok()?;
             let mut preferences: Self = serde_json::from_slice(&bytes).ok()?;
             if !preferences.volume.is_finite() {
                 return None;
@@ -55,7 +60,7 @@ impl Preferences {
     }
 }
 use windows::{
-    core::{w, Interface, Result, HSTRING},
+    core::{w, Interface, Result, BOOL, HSTRING},
     Win32::{
         Foundation::{CloseHandle, LPARAM, WPARAM},
         Media::Audio::{
@@ -81,9 +86,15 @@ impl App {
             audio.SetIsMuted(self.muted.get())?;
             let mut token = 0;
             audio.add_IsDocumentPlayingAudioChanged(
-                &IsDocumentPlayingAudioChangedEventHandler::create(Box::new(move |_, _| {
-                    if let Some(app) = current(generation) {
-                        let _ = app.apply_volume();
+                &IsDocumentPlayingAudioChangedEventHandler::create(Box::new(move |sender, _| {
+                    if let (Some(app), Some(web)) = (current(generation), sender) {
+                        let audio: ICoreWebView2_8 = web.cast()?;
+                        let mut playing = BOOL(0);
+                        audio.IsDocumentPlayingAudio(&mut playing)?;
+                        // Stopping playback does not require enumerating Windows audio sessions.
+                        if playing.as_bool() {
+                            let _ = app.apply_volume();
+                        }
                     }
                     Ok(())
                 })),
@@ -114,7 +125,7 @@ impl App {
                             let succeeded = serde_json::from_str::<serde_json::Value>(&result)
                                 .ok()
                                 .is_some_and(|value| value["result"]["value"] == true);
-                            if (hr.is_err() || !succeeded) && current(generation).is_some() {
+                            if hr.is_err() || !succeeded {
                                 if let Some(app) = current(generation) {
                                     let _ = PostMessageW(
                                         Some(app.hwnd),

@@ -63,6 +63,11 @@ leur ouverture par Windows ; les autres protocoles sont refusés. Les ressources
 et iframes des services restent gérées par WebView2. Aucun contournement de DRM,
 d’authentification ou des politiques du service n’est effectué.
 
+Les demandes de permissions de caméra, microphone, localisation, lecture du
+presse-papiers, capteurs, MIDI, fichiers, polices locales, notifications et gestion
+des fenêtres sont refusées. Les événements de téléchargement sont annulés.
+La lecture multimédia en streaming et sa politique de DRM restent gérées par le runtime.
+
 ## Conventions
 
 - Noms Rust en `snake_case`, types en `PascalCase`, constantes en `SCREAMING_SNAKE_CASE`.
@@ -117,6 +122,11 @@ dossier de la mise à jour, puis relance le service choisi. En cas
 d'échec détecté de l'installation ou du lancement, il tente de restaurer l'ancien
 exécutable. Cela ne constitue pas une détection des défaillances ultérieures de
 l'application ni un rollback complet du registre de l'installeur.
+
+Les chemins canoniques restent utilisés pour comparer les fichiers du helper.
+Les arguments `/DIR` et `/LOG` de l’installeur sont convertis en chemins locaux
+ordinaires : le préfixe Windows étendu `\\?\` produit par Rust n’est pas transmis
+à Inno Setup. Les chemins de réseau sont refusés avant la fermeture du lecteur.
 
 `installer/UltraMusic.iss` installe dans le dossier Programs de l'utilisateur,
 enregistre la désinstallation et ajoute les raccourcis. Son AppId reste constant
