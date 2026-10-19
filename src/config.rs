@@ -6,6 +6,7 @@ use url::Url;
 pub enum Service {
     Youtube,
     Apple,
+    YoutubeVideo,
 }
 
 impl Service {
@@ -31,6 +32,7 @@ impl Service {
         })();
         match saved.as_deref() {
             Some("apple\n") => Self::Apple,
+            Some("youtube-video\n") => Self::YoutubeVideo,
             _ => Self::Youtube,
         }
     }
@@ -48,6 +50,7 @@ impl Service {
             match self {
                 Self::Apple => "apple\n",
                 Self::Youtube => "youtube\n",
+                Self::YoutubeVideo => "youtube-video\n",
             },
         )?;
         std::fs::rename(temporary, path)
@@ -57,6 +60,23 @@ impl Service {
         match self {
             Self::Youtube => "https://music.youtube.com/",
             Self::Apple => "https://music.apple.com/",
+            Self::YoutubeVideo => "https://www.youtube.com/",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Youtube => "YouTube Music",
+            Self::Apple => "Apple Music",
+            Self::YoutubeVideo => "YouTube",
+        }
+    }
+
+    pub fn argument(self) -> &'static str {
+        match self {
+            Self::Youtube => "--youtube",
+            Self::Apple => "--apple",
+            Self::YoutubeVideo => "--youtube-video",
         }
     }
 
@@ -84,6 +104,14 @@ impl Service {
                 "idmsa.apple.com",
                 "appleid.apple.com",
                 "account.apple.com",
+            ],
+            Self::YoutubeVideo => &[
+                "www.youtube.com",
+                "youtube.com",
+                "accounts.google.com",
+                "consent.youtube.com",
+                "consent.google.com",
+                "accounts.youtube.com",
             ],
         };
         url.host_str().is_some_and(|host| hosts.contains(&host))
@@ -114,10 +142,11 @@ impl Config {
             match arg.as_str() {
                 "--youtube" => result.service = Service::Youtube,
                 "--apple" => result.service = Service::Apple,
+                "--youtube-video" => result.service = Service::YoutubeVideo,
                 "--keep-rendering" => result.keep_rendering = true,
                 _ => {
                     return Err(
-                        "Usage : ultramusic.exe [--youtube | --apple] [--keep-rendering]".into(),
+                        "Usage : ultramusic.exe [--youtube | --apple | --youtube-video] [--keep-rendering]".into(),
                     )
                 }
             }

@@ -1,6 +1,7 @@
 //! Native window transitions and dispatch. Modal UI runs outside COM callbacks.
 use super::{
-    app, dialog, show_error, App, EXTERNAL, FAILED, MEDIA_FAILED, RESTORE, TRAY, UPDATE_READY,
+    app, dialog, show_error, App, EXTERNAL, FAILED, HEADER_ACTION, MEDIA_FAILED, RESTORE, TRAY,
+    UPDATE_READY,
 };
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC;
 use windows::{
@@ -17,6 +18,16 @@ impl App {
             // SAFETY: the live controller and its parent are owned by this UI thread.
             unsafe {
                 if GetClientRect(self.hwnd, &mut rect).is_ok() {
+                    rect.top =
+                        super::drawing::px(self.hwnd, super::chrome::HEIGHT).min(rect.bottom);
+                    // Keep the native resize edges outside the browser child window,
+                    // which would otherwise consume their mouse hit testing.
+                    if !IsZoomed(self.hwnd).as_bool() {
+                        let edge = super::drawing::px(self.hwnd, 8);
+                        rect.left = edge.min(rect.right);
+                        rect.right = (rect.right - edge).max(rect.left);
+                        rect.bottom = (rect.bottom - edge).max(rect.top);
+                    }
                     let _ = c.SetBounds(rect);
                 }
             }
@@ -50,6 +61,10 @@ impl App {
         self.hidden.set(true);
         // SAFETY: visibility is updated on the owning UI thread without suspending audio.
         unsafe {
+            let settings = self.settings.replace(HWND::default());
+            if !settings.is_invalid() {
+                let _ = DestroyWindow(settings);
+            }
             if let Some(c) = self.controller() {
                 let _ = c.SetIsVisible(self.keep_rendering.get());
             }
@@ -81,7 +96,18 @@ pub(super) unsafe extern "system" fn window_proc(
             }
             return LRESULT(0);
         }
+        if let Some(result) = a.chrome_message(msg, wp, lp) {
+            return result;
+        }
         match msg {
+            HEADER_ACTION if wp.0 == a.generation.get() => a.header_action(lp.0),
+            WM_COMMAND => {
+                if wp.0 & 0xffff == super::chrome::PICKER {
+                    a.service_menu();
+                } else {
+                    a.command(wp.0 & 0xffff);
+                }
+            }
             MEDIA_FAILED if wp.0 == a.generation.get() => a.media_error(),
             UPDATE_READY => a.update_event(),
             WM_THEMECHANGED | WM_SETTINGCHANGE => super::theme::apply(hwnd),
@@ -97,6 +123,7 @@ pub(super) unsafe extern "system" fn window_proc(
                 if wp.0 == SIZE_MINIMIZED as usize {
                     a.hide();
                 } else {
+                    a.layout_chrome();
                     a.resize();
                 }
             }
@@ -117,6 +144,8 @@ pub(super) unsafe extern "system" fn window_proc(
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
                 a.resize();
+                a.layout_chrome();
+                a.extend_frame();
             }
             TRAY => match lp.0 as u32 {
                 WM_LBUTTONDBLCLK => a.restore(),
@@ -156,6 +185,12 @@ pub(super) unsafe extern "system" fn window_proc(
                 }
             }
             WM_DESTROY => {
+                a.service_button.set(HWND::default());
+                a.settings_button.set(HWND::default());
+                let settings = a.settings.replace(HWND::default());
+                if !settings.is_invalid() {
+                    let _ = DestroyWindow(settings);
+                }
                 a.close_webview();
                 a.remove_tray();
                 PostQuitMessage(0);

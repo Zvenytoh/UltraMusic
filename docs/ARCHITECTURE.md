@@ -9,6 +9,10 @@ src/
 └── native/
     ├── mod.rs           État partagé, initialisation STA et boucle GetMessageW
     ├── instance.rs      Garde RAII du mutex et activation de l’instance existante
+    ├── chrome.rs        Barre native, cadre DWM, sélection de service et clavier
+    ├── drawing.rs       Dessin GDI et icônes vectorielles avec ressources bornées
+    ├── settings.rs      Fenêtre de paramètres native appartenant au lecteur
+    ├── commands.rs      Actions partagées par la barre, les paramètres et le menu
     ├── webview.rs       Initialisation asynchrone, contrôleur et callbacks
     ├── window.rs        Messages Win32, taille, visibilité et dialogues différés
     └── tray.rs          Icône de notification et menu natif
@@ -84,8 +88,8 @@ Les contraintes des services musicaux restent décrites dans le README.
 
 ## Version 0.2 : audio, mises à jour et installation
 
-`native/service.rs` traite le choix Apple Music / YouTube Music du menu de
-notification. Le service actif appartient à une `Cell<Service>` sur le thread UI.
+`native/service.rs` traite le choix Apple Music / YouTube Music / YouTube de la
+barre et du menu de notification. Le service actif appartient à une `Cell<Service>` sur le thread UI.
 La préférence `service.txt` est remplacée après une écriture complète ; un échec
 d'écriture laisse le lecteur actuel intact. Au démarrage, une lecture bornée
 charge ce choix ; une préférence absente ou invalide utilise YouTube Music et les
@@ -133,3 +137,36 @@ enregistre la désinstallation et ajoute les raccourcis. Son AppId reste constan
 entre versions. Il installe WebView2 si aucune installation existante n'est détectée.
 Le script de build vérifie la signature Microsoft du bootstrapper embarqué.
 La désinstallation conserve volontairement les cookies et données de session.
+
+## Version 0.3 : barre intégrée et paramètres
+
+`native/chrome.rs` supprime le cadre supérieur standard avec `WM_NCCALCSIZE`
+et conserve les boutons DWM, le hit testing natif et les bords de redimensionnement.
+La barre noire mesure 56 pixels logiques ; les coordonnées, polices et icônes
+suivent le DPI de la fenêtre. Les limites WebView2 commencent sous cette barre.
+Les contrôles natifs restent distincts du contenu distant. La taille minimale
+évite le chevauchement du sélecteur, des paramètres et des boutons de fenêtre.
+
+`native/drawing.rs` dessine lors des événements de peinture et de survol.
+Les sélections GDI sont restaurées avant de libérer les pinceaux, polices et
+plumes. Les boutons Windows conservent leur nom accessible, leur focus et
+leur activation clavier ; les infobulles lisent ces noms à la demande.
+Le menu des services conserve aussi ses libellés natifs lors du dessin personnalisé.
+
+`native/settings.rs` possède une seule fenêtre de paramètres, sans nouvelle
+boucle de messages. Elle est détruite à la fermeture ou au masquage du lecteur.
+Les commandes audio, de rendu et de mise à jour passent par `commands.rs`,
+comme celles du menu de notification ; les états et noms accessibles sont
+rafraîchis après les actions. Le volume offre aussi des boutons clavier par pas
+de 10 %. Le rendu compatible reste une option de la session courante.
+
+F6 déplace le focus entre le lecteur et la barre ; Ctrl+, ouvre les paramètres.
+La boucle Win32 traite la navigation des contrôles sans détourner Tab dans la
+page. Les accélérateurs issus de WebView2 publient un message avec la génération
+du lecteur, puis retournent du callback avant d'ouvrir une fenêtre ou de déplacer
+le focus. Aucun nouveau timer, worker permanent ou WebView secondaire n'est ajouté.
+
+Le jeton historique `youtube` et `--youtube` désignent toujours YouTube Music.
+YouTube vidéo utilise `youtube-video` et `--youtube-video`, y compris pour la
+relance après installation. Sa liste d'hôtes HTTPS est explicite et conserve
+les restrictions de permissions, de téléchargement et de liens externes.

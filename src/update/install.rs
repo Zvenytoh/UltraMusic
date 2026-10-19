@@ -88,7 +88,7 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
     if restart.iter().any(|arg| {
         !matches!(
             arg.to_str(),
-            Some("--apple" | "--youtube" | "--keep-rendering")
+            Some("--apple" | "--youtube" | "--youtube-video" | "--keep-rendering")
         )
     }) {
         return Err("Options de redémarrage invalides.".into());

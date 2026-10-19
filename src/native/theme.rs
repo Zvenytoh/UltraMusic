@@ -1,4 +1,4 @@
-//! Native caption styling; no custom title-bar renderer or periodic work.
+//! DWM caption colors for the native header and owned settings window.
 use std::mem::size_of;
 use windows::{
     core::BOOL,

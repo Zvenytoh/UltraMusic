@@ -1,9 +1,6 @@
 //! Update UI coordination. Workers exchange owned data; no COM crosses threads.
 use super::{dialog, App, UPDATE_READY};
-use crate::{
-    config::Service,
-    update::{self, Download, Release},
-};
+use crate::update::{self, Download, Release};
 use std::sync::mpsc;
 use windows::Win32::{
     Foundation::{HWND, LPARAM, WPARAM},
@@ -36,6 +33,7 @@ impl App {
         let (sender, receiver) = mpsc::channel();
         *self.update_receiver.borrow_mut() = Some(receiver);
         self.update_busy.set(true);
+        self.refresh_ui();
         let address = self.hwnd.0 as isize;
         if std::thread::Builder::new()
             .name("ultramusic-update".into())
@@ -58,6 +56,7 @@ impl App {
         {
             self.update_receiver.borrow_mut().take();
             self.update_busy.set(false);
+            self.refresh_ui();
             if self.update_manual.get() {
                 self.update_error("Impossible de démarrer la vérification des mises à jour.");
             }
@@ -93,10 +92,7 @@ impl App {
             }
             Event::Checked(Err(error)) if self.update_manual.get() => self.update_error(&error),
             Event::Downloaded(Ok(download)) => {
-                let service = match self.service.get() {
-                    Service::Apple => "--apple",
-                    Service::Youtube => "--youtube",
-                };
+                let service = self.service.get().argument();
                 let mut options = vec![service];
                 if self.keep_rendering.get() {
                     options.push("--keep-rendering");
@@ -115,6 +111,7 @@ impl App {
             _ => {}
         }
         self.update_busy.set(false);
+        self.refresh_ui();
     }
 
     fn update_error(&self, error: &str) {

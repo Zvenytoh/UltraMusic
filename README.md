@@ -2,11 +2,11 @@
   <img src="assets/logo.png" width="112" height="112" alt="UltraMusic logo">
   <h1>UltraMusic</h1>
   <p><strong>Your music. A native Windows home.</strong></p>
-  <p>Apple Music and YouTube Music in a focused desktop player.</p>
+  <p>Apple Music, YouTube Music and YouTube in one focused desktop player.</p>
   <p>
-    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.4/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.3.0/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
   </p>
-  <p>Windows 11 · x64 · Version 0.2.4</p>
+  <p>Windows 11 · x64 · Version 0.3.0</p>
   <p>
     <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
@@ -25,7 +25,7 @@
 
 ## Music, with less in the way
 
-UltraMusic brings the official Apple Music and YouTube Music websites into a
+UltraMusic brings the official Apple Music, YouTube Music and YouTube websites into a
 native Windows application. Sign in to your provider, open your library and
 keep listening while the window is tucked away in the notification area.
 
@@ -37,8 +37,12 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Features
 
-- **Native desktop experience** — a black title bar, red application identity,
-  Start menu shortcut and standard Windows uninstall entry.
+- **Native desktop experience** — a unified black header with red outline icons,
+  DPI scaling, Windows caption controls and keyboard navigation.
+- **Switch your workspace** — choose Apple Music, YouTube Music or YouTube from
+  the header; one player stays active and your selection is remembered.
+- **Settings at hand** — open the gear button for application volume, mute,
+  background rendering compatibility, installed version and updates.
 - **Background listening** — close or minimize the window to keep the player
   available in the notification area.
 - **Controls within reach** — play/pause, application volume and mute from the
@@ -52,7 +56,7 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Installation
 
-1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.2.4/UltraMusic-Setup.exe)**.
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.3.0/UltraMusic-Setup.exe)**.
 2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
 3. Open **UltraMusic** from the Start menu.
 
@@ -63,16 +67,21 @@ runtime using Microsoft's bootstrapper. An Internet connection is required.
 Remove the application through **Windows Settings → Apps → Installed apps**.
 Your music service session data is kept separately from the program files.
 
-[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.2.4)
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.3.0)
 
 ## Everyday controls
 
-Right-click the UltraMusic icon in the Windows notification area:
+Use the service button in the top bar to switch providers and the gear button
+to open settings. **F6** moves between the player and header; **Tab** moves through
+the native controls, **Space** activates a button, **Ctrl+,** opens settings, and
+**Escape** closes settings or returns from the header to the player.
+
+Right-click the UltraMusic icon in the Windows notification area for background controls:
 
 | Control | Action |
 | :--- | :--- |
 | Open UltraMusic | Restore the existing player window |
-| Apple Music / YouTube Music | Switch provider and remember the selection |
+| Apple Music / YouTube Music / YouTube | Switch provider and remember the selection |
 | Play / Pause | Toggle playback on the service's accessible media player |
 | Mute | Mute or unmute the WebView's audio |
 | Volume −10% / +10% | Adjust UltraMusic's audio sessions, rather than system master volume |
@@ -89,17 +98,21 @@ Your volume and mute preferences are remembered between launches.
 
 ## Choose your service
 
-Right-click the UltraMusic icon in the Windows notification area and choose
-**Apple Music** or **YouTube Music**. The selected service has a check mark and
-is remembered for future launches. Switching interrupts playback and opens the
+Open the service picker in the header and choose **Apple Music**,
+**YouTube Music** or **YouTube**. The same choices are available in the tray menu.
+The selected service has a check mark and is remembered for future launches.
+Switching interrupts playback and opens the
 chosen service in the player window; your sign-in sessions are preserved.
 
 YouTube Music is used on first launch. Command-line options override the saved
-choice for that launch; select a service in the tray menu to save a new default.
+choice for that launch; choose a service in the header or tray to save a new default.
 
 ```powershell
 # Apple Music
 & "$env:LOCALAPPDATA\Programs\UltraMusic\UltraMusic.exe" --apple
+
+# YouTube videos
+& "$env:LOCALAPPDATA\Programs\UltraMusic\UltraMusic.exe" --youtube-video
 
 # Keep rendering enabled when the window is hidden
 & "$env:LOCALAPPDATA\Programs\UltraMusic\UltraMusic.exe" --keep-rendering
@@ -113,7 +126,7 @@ and available playback features are managed by the music service.
 
 UltraMusic checks published releases once when it starts. If a newer compatible
 version is available, it asks before downloading and installing it. You can also
-check manually from the tray menu.
+check manually from **Settings** or the tray menu.
 
 Downloads are restricted to the official repository and GitHub's delivery hosts.
 The installer size and SHA-256 digest are verified before it runs. After you
@@ -175,7 +188,7 @@ tagged versions to GitHub Releases.
 src/
 ├── main.rs             Entry point and update-helper dispatch
 ├── config.rs           Service selection and navigation policy
-├── native/             Win32 window, WebView2, tray, theme and audio controls
+├── native/             Win32 header, settings, WebView2, tray and audio controls
 └── update/             Release discovery, HTTPS transport and setup coordination
 installer/              Windows installer definition
 assets/                 Application identity and icons

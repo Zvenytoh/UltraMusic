@@ -1,11 +1,13 @@
 //! WebView2 initialization, navigation policy, and generation-scoped callbacks.
-use super::{current, App, EXTERNAL, FAILED};
+use super::{current, App, EXTERNAL, FAILED, HEADER_ACTION};
 use crate::config::external_url;
 use webview2_com::{
-    CoTaskMemPWSTR, CreateCoreWebView2ControllerCompletedHandler,
-    CreateCoreWebView2EnvironmentCompletedHandler, DownloadStartingEventHandler,
+    AcceleratorKeyPressedEventHandler, CoTaskMemPWSTR,
+    CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
+    DownloadStartingEventHandler,
     Microsoft::Web::WebView2::Win32::{
         CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller, ICoreWebView2_4,
+        COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN,
         COREWEBVIEW2_PERMISSION_KIND_CAMERA, COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ,
         COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE, COREWEBVIEW2_PERMISSION_KIND_GEOLOCATION,
         COREWEBVIEW2_PERMISSION_KIND_LOCAL_FONTS, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
@@ -121,6 +123,44 @@ impl App {
             settings.SetIsWebMessageEnabled(false)?;
             settings.SetAreHostObjectsAllowed(false)?;
             let mut token = 0;
+            controller.add_AcceleratorKeyPressed(
+                &AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
+                    if let (Some(app), Some(args)) = (current(generation), args) {
+                        let mut kind = Default::default();
+                        let mut key = 0;
+                        args.KeyEventKind(&mut kind)?;
+                        args.VirtualKey(&mut key)?;
+                        if kind == COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN
+                            || kind == COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN
+                        {
+                            use windows::Win32::UI::Input::KeyboardAndMouse::{
+                                GetKeyState, VK_CONTROL, VK_F6, VK_OEM_COMMA,
+                            };
+                            let action = if key == u32::from(VK_F6.0) {
+                                1
+                            } else if key == u32::from(VK_OEM_COMMA.0)
+                                && GetKeyState(VK_CONTROL.0 as i32) < 0
+                            {
+                                2
+                            } else {
+                                0
+                            };
+                            if action != 0 {
+                                // Return from the browser callback before changing focus or opening native UI.
+                                PostMessageW(
+                                    Some(app.hwnd),
+                                    HEADER_ACTION,
+                                    WPARAM(generation),
+                                    LPARAM(action),
+                                )?;
+                                args.SetHandled(true)?;
+                            }
+                        }
+                    }
+                    Ok(())
+                })),
+                &mut token,
+            )?;
             web.add_PermissionRequested(
                 &PermissionRequestedEventHandler::create(Box::new(move |_, args| {
                     if let Some(args) = args {

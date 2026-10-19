@@ -59,10 +59,14 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
+          - A unified black, DPI-aware header with native Windows caption controls.
+          - An illustrated service picker for Apple Music, YouTube Music and YouTube.
+          - Native settings for volume, mute, background rendering and updates.
+          - Keyboard navigation: F6 for the header, Ctrl+, for settings and Escape to return.
           - Restricted WebView2 device permissions and blocked page downloads.
           - Correct Windows paths for the update installer and its log.
           - Fewer audio-session scans when playback stops.
-          - Switch between Apple Music and YouTube Music directly from the tray.
+          - Shared service and audio actions in the header, settings and tray.
           - Remembered service selection for future launches.
           - Black native title bar and new red brand identity.
           - Tray playback, application volume and mute controls.

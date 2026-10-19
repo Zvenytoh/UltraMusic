@@ -19,6 +19,7 @@ impl App {
             return;
         }
         self.service.set(service);
+        self.refresh_ui();
         // start invalidates callbacks from the previous generation before closing it.
         if self.start().is_err() {
             self.report_failure();

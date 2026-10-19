@@ -1,9 +1,13 @@
 //! Windows host: STA lifetime, application state, and the blocking message loop.
 //! Child modules never hold a RefCell borrow across a Win32/COM call.
 
+mod chrome;
+mod commands;
+mod drawing;
 mod instance;
 mod media;
 mod service;
+mod settings;
 mod theme;
 mod tray;
 mod updates;
@@ -32,7 +36,8 @@ use windows::{
                 CreateWindowExW, DispatchMessageW, GetMessageW, LoadCursorW, LoadIconW,
                 MessageBoxW, RegisterClassW, RegisterWindowMessageW, ShowWindow, TranslateMessage,
                 CW_USEDEFAULT, HICON, IDC_ARROW, MB_ICONERROR, MB_OK, MESSAGEBOX_RESULT,
-                MESSAGEBOX_STYLE, MSG, SW_SHOW, WM_APP, WNDCLASSW, WS_OVERLAPPEDWINDOW,
+                MESSAGEBOX_STYLE, MSG, SW_SHOW, WM_APP, WNDCLASSW, WS_CLIPCHILDREN,
+                WS_OVERLAPPEDWINDOW,
             },
         },
     },
@@ -45,11 +50,15 @@ const FAILED: u32 = WM_APP + 3;
 const EXTERNAL: u32 = WM_APP + 4;
 const UPDATE_READY: u32 = WM_APP + 5;
 const MEDIA_FAILED: u32 = WM_APP + 6;
+const HEADER_ACTION: u32 = WM_APP + 7;
 
 thread_local! { static APP: RefCell<Option<Rc<App>>> = const { RefCell::new(None) }; }
 struct App {
     hwnd: HWND,
     icon: HICON,
+    service_button: Cell<HWND>,
+    settings_button: Cell<HWND>,
+    settings: Cell<HWND>,
     service: Cell<Service>,
     profile: HSTRING,
     controller: RefCell<Option<ICoreWebView2Controller>>,
@@ -127,7 +136,7 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             Default::default(),
             CLASS,
             w!("UltraMusic"),
-            WS_OVERLAPPEDWINDOW,
+            WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             1100,
@@ -142,6 +151,9 @@ pub(crate) fn run() -> std::result::Result<(), String> {
         let state = Rc::new(App {
             hwnd,
             icon,
+            service_button: Cell::new(HWND::default()),
+            settings_button: Cell::new(HWND::default()),
+            settings: Cell::new(HWND::default()),
             keep_rendering: Cell::new(config.keep_rendering),
             service: Cell::new(config.service),
             profile: HSTRING::from(profile.as_os_str()),
@@ -159,6 +171,11 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             update_receiver: RefCell::new(None),
         });
         APP.with(|a| *a.borrow_mut() = Some(state.clone()));
+        if let Err(error) = state.create_chrome() {
+            let _ = windows::Win32::UI::WindowsAndMessaging::DestroyWindow(hwnd);
+            APP.with(|a| a.borrow_mut().take());
+            return Err(error.to_string());
+        }
         state.add_tray();
         let _ = ShowWindow(hwnd, SW_SHOW);
         if state.start().is_err() {
@@ -171,6 +188,9 @@ pub(crate) fn run() -> std::result::Result<(), String> {
                 -1 => break Err(windows::core::Error::from_thread().to_string()),
                 0 => break Ok(()),
                 _ => {
+                    if state.keyboard(&msg) {
+                        continue;
+                    }
                     let _ = TranslateMessage(&msg);
                     DispatchMessageW(&msg);
                 }
