@@ -59,6 +59,7 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
+          - Installer compatibility with legacy updaters that pass extended Windows paths.
           - A unified black, DPI-aware header with native Windows caption controls.
           - An illustrated service picker for Apple Music, YouTube Music and YouTube.
           - Native settings for volume, mute, background rendering and updates.
@@ -78,7 +79,8 @@ jobs:
           Requires Windows 11 x64 and an Internet connection. Music service
           accounts, subscriptions and playback availability are managed by each provider.
 
-          If updating from an older version fails, quit UltraMusic and run the
-          downloaded installer manually once to replace the previous update helper.
+          The installer normalizes the local drive path sent by older update helpers.
+          If updating still fails, quit UltraMusic and run the downloaded installer
+          manually; provider sessions are retained.
           NOTES
           gh release create "$GITHUB_REF_NAME" release/UltraMusic-Setup.exe --repo "$GITHUB_REPOSITORY" --verify-tag --latest --title "UltraMusic $GITHUB_REF_NAME" --notes-file release-notes.md

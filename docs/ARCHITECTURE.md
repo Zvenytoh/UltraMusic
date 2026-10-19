@@ -131,6 +131,11 @@ Les chemins canoniques restent utilisés pour comparer les fichiers du helper.
 Les arguments `/DIR` et `/LOG` de l’installeur sont convertis en chemins locaux
 ordinaires : le préfixe Windows étendu `\\?\` produit par Rust n’est pas transmis
 à Inno Setup. Les chemins de réseau sont refusés avant la fermeture du lecteur.
+Depuis 0.3.1, l'installeur lui-même convertit aussi le préfixe `\\?\` d'un
+chemin de disque local dans `InitializeWizard`, avant la validation du dossier.
+Cette compatibilité permet aux helpers antérieurs à 0.2.4 de mettre à jour
+le lecteur ; corriger uniquement le helper livré ne débloquait pas ces versions.
+Les chemins UNC et les autres noms invalides ne sont pas normalisés.
 
 `installer/UltraMusic.iss` installe dans le dossier Programs de l'utilisateur,
 enregistre la désinstallation et ajoute les raccourcis. Son AppId reste constant

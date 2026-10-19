@@ -44,6 +44,25 @@ Name: "{autodesktop}\UltraMusic"; Filename: "{app}\UltraMusic.exe"; Tasks: deskt
 Filename: "{app}\UltraMusic.exe"; Description: "Launch UltraMusic"; Flags: nowait postinstall skipifsilent
 
 [Code]
+procedure InitializeWizard;
+var
+  Directory, Drive: String;
+begin
+  { Updaters before 0.2.4 pass Rust's canonical \\?\ drive path to /DIR.
+    Repair that legacy input before Setup validates the hidden directory page.
+    Only local drive prefixes are converted; other invalid paths stay invalid. }
+  Directory := WizardForm.DirEdit.Text;
+  Drive := Uppercase(Copy(Directory, 5, 1));
+  if (Copy(Directory, 1, 4) = '\\?\') and
+    (Length(Drive) = 1) and (Pos(Drive, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') > 0) and
+    (Copy(Directory, 6, 2) = ':\') then
+  begin
+    Delete(Directory, 1, 4);
+    WizardForm.DirEdit.Text := Directory;
+    Log('Normalized legacy updater directory to an ordinary local drive path.');
+  end;
+end;
+
 function HasRuntimeAt(Root: Integer; Key: String): Boolean;
 var
   Version: String;
