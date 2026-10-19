@@ -207,7 +207,7 @@ impl App {
 
     fn draw_setting(&self, item: &DRAWITEMSTRUCT) {
         let hwnd = item.hwndItem;
-        let color = button_background(item);
+        button_background(item);
         let id = item.CtlID as usize;
         if id == VOLUME_DOWN || id == VOLUME_UP {
             icon(
@@ -221,7 +221,6 @@ impl App {
                 px(hwnd, 7),
                 px(hwnd, 7),
                 WHITE,
-                color,
             );
         } else {
             let selected =
@@ -234,7 +233,6 @@ impl App {
                     px(hwnd, 14),
                     (item.rcItem.bottom - px(hwnd, 22)) / 2,
                     RED,
-                    color,
                 );
             }
             let label = match id {

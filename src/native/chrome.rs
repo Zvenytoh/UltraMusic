@@ -12,7 +12,7 @@ use windows::{
 };
 
 pub(super) const PICKER: usize = 20;
-pub(super) const HEIGHT: i32 = 56;
+pub(super) const HEIGHT: i32 = 40;
 
 /// Native BUTTONs retain keyboard, accessibility and pressed-state behavior.
 pub(super) fn button(parent: HWND, id: usize, label: &str) -> Result<HWND> {
@@ -124,7 +124,7 @@ unsafe extern "system" fn button_proc(
     }
 }
 
-pub(super) fn button_background(item: &DRAWITEMSTRUCT) -> windows::Win32::Foundation::COLORREF {
+pub(super) fn button_background(item: &DRAWITEMSTRUCT) {
     // SAFETY: owner-draw data comes from the live button's WM_DRAWITEM.
     unsafe {
         let mut point = POINT::default();
@@ -134,6 +134,8 @@ pub(super) fn button_background(item: &DRAWITEMSTRUCT) -> windows::Win32::Founda
             && PtInRect(&bounds, point).as_bool();
         let color = if hovered || item.itemState.0 & ODS_SELECTED.0 != 0 {
             HOVER
+        } else if item.CtlID as usize == SETTINGS {
+            BLACK
         } else {
             PANEL
         };
@@ -144,12 +146,13 @@ pub(super) fn button_background(item: &DRAWITEMSTRUCT) -> windows::Win32::Founda
             color,
             if item.itemState.0 & ODS_FOCUS.0 != 0 {
                 WHITE
+            } else if matches!(item.CtlID as usize, SETTINGS | PICKER) {
+                color
             } else {
                 LINE
             },
             px(item.hwndItem, 10),
         );
-        color
     }
 }
 
@@ -253,8 +256,8 @@ impl App {
             let _ = DwmExtendFrameIntoClientArea(
                 self.hwnd,
                 &MARGINS {
-                    // Keep the painted header opaque; only extend the frame edge.
-                    cyTopHeight: 1,
+                    // The full caption height is needed for DWM to draw its buttons.
+                    cyTopHeight: px(self.hwnd, HEIGHT),
                     ..Default::default()
                 },
             );
@@ -284,23 +287,23 @@ impl App {
         unsafe {
             let mut bounds = RECT::default();
             let _ = GetClientRect(self.hwnd, &mut bounds);
-            let x = bounds.right - self.caption_width() - px(self.hwnd, 52);
+            let x = bounds.right - self.caption_width() - px(self.hwnd, 40);
             let _ = SetWindowPos(
                 self.settings_button.get(),
                 None,
                 x,
-                px(self.hwnd, 10),
-                px(self.hwnd, 36),
-                px(self.hwnd, 36),
+                px(self.hwnd, 6),
+                px(self.hwnd, 28),
+                px(self.hwnd, 28),
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
             let _ = SetWindowPos(
                 self.service_button.get(),
                 None,
-                px(self.hwnd, 168),
-                px(self.hwnd, 10),
-                px(self.hwnd, 224),
-                px(self.hwnd, 36),
+                px(self.hwnd, 44),
+                px(self.hwnd, 6),
+                px(self.hwnd, 188),
+                px(self.hwnd, 28),
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
             let header = rect(0, 0, bounds.right, px(self.hwnd, HEIGHT));
@@ -364,43 +367,33 @@ impl App {
 
     pub(super) fn draw_header_button(&self, item: &DRAWITEMSTRUCT) {
         let hwnd = item.hwndItem;
-        let color = button_background(item);
+        button_background(item);
         if item.CtlID as usize == SETTINGS {
-            icon(
-                item.hDC,
-                hwnd,
-                Icon::Gear,
-                px(hwnd, 7),
-                px(hwnd, 7),
-                WHITE,
-                color,
-            );
+            icon(item.hDC, hwnd, Icon::Gear, px(hwnd, 3), px(hwnd, 3), WHITE);
         } else {
             icon(
                 item.hDC,
                 hwnd,
                 service_icon(self.service.get()),
-                px(hwnd, 10),
-                px(hwnd, 7),
+                px(hwnd, 6),
+                px(hwnd, 3),
                 RED,
-                color,
             );
             text(
                 item.hDC,
                 hwnd,
                 self.service.get().label(),
-                rect(px(hwnd, 42), 0, px(hwnd, 148), px(hwnd, 36)),
-                13,
+                rect(px(hwnd, 34), 0, px(hwnd, 124), px(hwnd, 28)),
+                12,
                 WHITE,
             );
             icon(
                 item.hDC,
                 hwnd,
                 Icon::Chevron,
-                px(hwnd, 193),
-                px(hwnd, 7),
+                px(hwnd, 160),
+                px(hwnd, 3),
                 MUTED,
-                color,
             );
         }
     }
@@ -408,6 +401,13 @@ impl App {
     pub(super) fn chrome_message(&self, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESULT> {
         // SAFETY: message-specific pointers come from Windows and live for this dispatch.
         unsafe {
+            // DWM needs caption mouse/paint messages too, not only hit testing.
+            // Our layout and client painting still take precedence below.
+            let mut dwm_result = LRESULT(0);
+            let dwm_handled = DwmDefWindowProc(self.hwnd, msg, wp, lp, &mut dwm_result).as_bool();
+            if dwm_handled && !matches!(msg, WM_NCCALCSIZE | WM_PAINT | WM_GETMINMAXINFO) {
+                return Some(dwm_result);
+            }
             match msg {
                 WM_NCCALCSIZE if wp.0 != 0 => {
                     if IsZoomed(self.hwnd).as_bool() {
@@ -425,10 +425,6 @@ impl App {
                     return Some(LRESULT(0));
                 }
                 WM_NCHITTEST => {
-                    let mut result = LRESULT(0);
-                    if DwmDefWindowProc(self.hwnd, msg, wp, lp, &mut result).as_bool() {
-                        return Some(result);
-                    }
                     let mut point = POINT {
                         x: lp.0 as i16 as i32,
                         y: (lp.0 >> 16) as i16 as i32,
@@ -436,7 +432,7 @@ impl App {
                     let _ = ScreenToClient(self.hwnd, &mut point);
                     let mut bounds = RECT::default();
                     let _ = GetClientRect(self.hwnd, &mut bounds);
-                    let edge = px(self.hwnd, 8);
+                    let edge = px(self.hwnd, 6);
                     if !IsZoomed(self.hwnd).as_bool() {
                         let left = point.x < edge;
                         let right = point.x >= bounds.right - edge;
@@ -466,7 +462,7 @@ impl App {
                 WM_GETMINMAXINFO => {
                     let info = &mut *(lp.0 as *mut MINMAXINFO);
                     info.ptMinTrackSize = POINT {
-                        x: px(self.hwnd, 680),
+                        x: px(self.hwnd, 500),
                         y: px(self.hwnd, 440),
                     };
                     return Some(LRESULT(0));
@@ -479,27 +475,14 @@ impl App {
                     fill(dc, &bounds, BLACK);
                     let _ = DrawIconEx(
                         dc,
-                        px(self.hwnd, 16),
-                        px(self.hwnd, 16),
+                        px(self.hwnd, 12),
+                        px(self.hwnd, 10),
                         self.icon,
-                        px(self.hwnd, 24),
-                        px(self.hwnd, 24),
+                        px(self.hwnd, 20),
+                        px(self.hwnd, 20),
                         0,
                         None,
                         DI_NORMAL,
-                    );
-                    text(
-                        dc,
-                        self.hwnd,
-                        "UltraMusic",
-                        rect(
-                            px(self.hwnd, 50),
-                            0,
-                            px(self.hwnd, 108),
-                            px(self.hwnd, HEIGHT),
-                        ),
-                        14,
-                        WHITE,
                     );
                     let _ = EndPaint(self.hwnd, &paint);
                     return Some(LRESULT(0));
@@ -508,8 +491,8 @@ impl App {
                 WM_MEASUREITEM => {
                     let item = &mut *(lp.0 as *mut MEASUREITEMSTRUCT);
                     if item.CtlType == ODT_MENU {
-                        item.itemWidth = px(self.hwnd, 252) as u32;
-                        item.itemHeight = px(self.hwnd, 44) as u32;
+                        item.itemWidth = px(self.hwnd, 224) as u32;
+                        item.itemHeight = px(self.hwnd, 36) as u32;
                         return Some(LRESULT(1));
                     }
                 }
@@ -533,20 +516,19 @@ impl App {
                                 item.hDC,
                                 self.hwnd,
                                 service_icon(*service),
-                                x + px(self.hwnd, 12),
-                                y + px(self.hwnd, 11),
+                                x + px(self.hwnd, 8),
+                                y + px(self.hwnd, 7),
                                 RED,
-                                color,
                             );
                             text(
                                 item.hDC,
                                 self.hwnd,
                                 service.label(),
                                 rect(
-                                    x + px(self.hwnd, 46),
+                                    x + px(self.hwnd, 38),
                                     y,
-                                    px(self.hwnd, 164),
-                                    px(self.hwnd, 44),
+                                    px(self.hwnd, 152),
+                                    px(self.hwnd, 36),
                                 ),
                                 13,
                                 WHITE,
@@ -556,10 +538,9 @@ impl App {
                                     item.hDC,
                                     self.hwnd,
                                     Icon::Check,
-                                    x + px(self.hwnd, 220),
-                                    y + px(self.hwnd, 11),
+                                    x + px(self.hwnd, 194),
+                                    y + px(self.hwnd, 7),
                                     WHITE,
-                                    color,
                                 );
                             }
                         }

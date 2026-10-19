@@ -147,12 +147,14 @@ La désinstallation conserve volontairement les cookies et données de session.
 
 `native/chrome.rs` supprime le cadre supérieur standard avec `WM_NCCALCSIZE`
 et conserve les boutons DWM, le hit testing natif et les bords de redimensionnement.
-La barre noire mesure 56 pixels logiques ; les coordonnées, polices et icônes
+La barre noire mesure 40 pixels logiques depuis 0.3.2 ; les coordonnées, polices et icônes
 suivent le DPI de la fenêtre. Les limites WebView2 commencent sous cette barre.
 Les contrôles natifs restent distincts du contenu distant. La taille minimale
 évite le chevauchement du sélecteur, des paramètres et des boutons de fenêtre.
 
 `native/drawing.rs` dessine lors des événements de peinture et de survol.
+Les icônes utilisent les glyphes vectoriels lissés de Segoe Fluent Icons,
+fourni par Windows 11, à 16 pixels logiques ; aucune police Apple n'est embarquée.
 Les sélections GDI sont restaurées avant de libérer les pinceaux, polices et
 plumes. Les boutons Windows conservent leur nom accessible, leur focus et
 leur activation clavier ; les infobulles lisent ces noms à la demande.
@@ -170,6 +172,15 @@ La boucle Win32 traite la navigation des contrôles sans détourner Tab dans la
 page. Les accélérateurs issus de WebView2 publient un message avec la génération
 du lecteur, puis retournent du callback avant d'ouvrir une fenêtre ou de déplacer
 le focus. Aucun nouveau timer, worker permanent ou WebView secondaire n'est ajouté.
+
+Depuis 0.3.2, l'extension DWM couvre toute la hauteur de la barre et non un seul
+pixel. Les messages de légende sont transmis à `DwmDefWindowProc` avant le
+traitement propre au lecteur, pas seulement `WM_NCHITTEST`. Les boutons de fenêtre
+restent dessinés et gérés par Windows à droite. La place qu'ils occupent est
+réservée avant de positionner les paramètres. Le sélecteur mesure 188 × 28 pixels
+logiques ; la largeur minimale est réduite à 500 pixels logiques, pour faciliter
+les dispositions Windows Snap. La fermeture et la réduction gardent le
+comportement existant de masquage dans la zone de notification.
 
 Le jeton historique `youtube` et `--youtube` désignent toujours YouTube Music.
 YouTube vidéo utilise `youtube-video` et `--youtube-video`, y compris pour la

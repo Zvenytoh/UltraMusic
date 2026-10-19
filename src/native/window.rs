@@ -23,7 +23,7 @@ impl App {
                     // Keep the native resize edges outside the browser child window,
                     // which would otherwise consume their mouse hit testing.
                     if !IsZoomed(self.hwnd).as_bool() {
-                        let edge = super::drawing::px(self.hwnd, 8);
+                        let edge = super::drawing::px(self.hwnd, 6);
                         rect.left = edge.min(rect.right);
                         rect.right = (rect.right - edge).max(rect.left);
                         rect.bottom = (rect.bottom - edge).max(rect.top);
