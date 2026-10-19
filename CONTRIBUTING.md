@@ -4,6 +4,8 @@ Lire le [README](README.md) et l’[architecture](docs/ARCHITECTURE.md) avant de
 le lecteur. Utiliser Rust stable et, pour le build de référence, Windows x64 avec
 les outils C++ MSVC et le SDK Windows.
 
+La configuration Codex du projet est décrite dans [docs/CODEX.md](docs/CODEX.md).
+
 La CI utilise MSVC et Inno Setup pour publier `UltraMusic-Setup.exe` sur GitHub
 Releases lorsqu'un tag `v*` est poussé, après réussite des contrôles et compilation.
 Le runtime C est lié statiquement via `.cargo/config.toml` ; le loader WebView2
