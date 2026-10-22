@@ -128,6 +128,10 @@ pub(super) enum Icon {
     Check,
     Minus,
     Plus,
+    Minimize,
+    Maximize,
+    Restore,
+    Close,
 }
 
 pub(super) fn icon(dc: HDC, hwnd: HWND, icon: Icon, x: i32, y: i32, color: COLORREF) {
@@ -141,6 +145,10 @@ pub(super) fn icon(dc: HDC, hwnd: HWND, icon: Icon, x: i32, y: i32, color: COLOR
         Icon::Check => '\u{E73E}',
         Icon::Minus => '\u{E738}',
         Icon::Plus => '\u{E710}',
+        Icon::Minimize => '\u{E921}',
+        Icon::Maximize => '\u{E922}',
+        Icon::Restore => '\u{E923}',
+        Icon::Close => '\u{E8BB}',
     };
     let mut value = [glyph as u16];
     let mut bounds = rect(x, y, px(hwnd, 22), px(hwnd, 22));

@@ -145,8 +145,9 @@ La désinstallation conserve volontairement les cookies et données de session.
 
 ## Version 0.3 : barre intégrée et paramètres
 
-`native/chrome.rs` supprime le cadre supérieur standard avec `WM_NCCALCSIZE`
-et conserve les boutons DWM, le hit testing natif et les bords de redimensionnement.
+`native/chrome.rs` supprime le cadre supérieur standard avec `WM_NCCALCSIZE`.
+Depuis 0.4, trois contrôles natifs BUTTON gèrent les commandes de fenêtre ;
+le cadre DWM reste limité à la bordure et aux effets système.
 La barre noire mesure 40 pixels logiques depuis 0.3.2 ; les coordonnées, polices et icônes
 suivent le DPI de la fenêtre. Les limites WebView2 commencent sous cette barre.
 Les contrôles natifs restent distincts du contenu distant. La taille minimale
@@ -173,7 +174,7 @@ page. Les accélérateurs issus de WebView2 publient un message avec la généra
 du lecteur, puis retournent du callback avant d'ouvrir une fenêtre ou de déplacer
 le focus. Aucun nouveau timer, worker permanent ou WebView secondaire n'est ajouté.
 
-Depuis 0.3.2, l'extension DWM couvre toute la hauteur de la barre et non un seul
+Dans 0.3.2, l'extension DWM couvrait toute la hauteur de la barre et non un seul
 pixel. Les messages de légende sont transmis à `DwmDefWindowProc` avant le
 traitement propre au lecteur, pas seulement `WM_NCHITTEST`. Les boutons de fenêtre
 restent dessinés et gérés par Windows à droite. La place qu'ils occupent est
@@ -186,3 +187,33 @@ Le jeton historique `youtube` et `--youtube` désignent toujours YouTube Music.
 YouTube vidéo utilise `youtube-video` et `--youtube-video`, y compris pour la
 relance après installation. Sa liste d'hôtes HTTPS est explicite et conserve
 les restrictions de permissions, de téléchargement et de liens externes.
+
+## Version 0.4 : bloqueur et boutons de fenêtre
+
+`native/blocker.rs` active les API d'extensions avant la création de l'environnement
+WebView2. Il charge le paquet uBO Lite local avant la navigation initiale, et
+conserve sa référence COM sur le thread UI. Le dossier installé `blocker` est
+stable entre versions. Les chemins sont convertis vers une même forme de disque
+local, y compris après une relance de mise à jour en chemin Windows étendu.
+
+Le module est activé uniquement sur YouTube et YouTube Music, selon une préférence
+`blocker.txt` lue avec une limite de 16 octets. Apple Music demande sa désactivation
+avant navigation. Les activations sont sérialisées et relisent le choix utilisateur
+avant la navigation : des clics rapides ne laissent pas appliquer un ancien réglage.
+Tous les callbacks vérifient la génération du lecteur. Un échec d'initialisation
+affiche « indisponible » et laisse le lecteur naviguer ; l'état « activé » vérifie
+seulement IsEnabled, sans prétendre prouver la suppression des publicités.
+
+Le paquet officiel est inchangé, épinglé et vérifié par SHA-256 dans
+`scripts/prepare-blocker.ps1`. Il accompagne l'installeur avec ses licences et les
+références de source de `THIRD_PARTY.md`. Les mises à jour du paquet passent par
+les releases d'UltraMusic. Les scripts de filtrage de cette extension constituent
+l'exception approuvée à l'évitement des scripts de page permanents ; aucun objet
+hôte, WebMessage ni canal natif n'est ajouté pour les pages distantes.
+
+Les trois boutons de fenêtre utilisent les mêmes rectangles de HWND pour le dessin
+et le hit testing, sans déduire leur position du cadre DWM maximisé. Le parent
+renvoie HTMAXBUTTON pour Windows Snap puis transmet l'appui à BUTTON : Windows
+gère la capture, l'annulation et le relâchement hors du bouton. L'activation passe
+par WM_SYSCOMMAND pour réduire, maximiser/restaurer et fermer vers la notification.
+Les noms accessibles, infobulles, focus et dimensions suivent le DPI.

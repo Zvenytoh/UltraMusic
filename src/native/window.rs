@@ -185,6 +185,7 @@ pub(super) unsafe extern "system" fn window_proc(
                 }
             }
             WM_DESTROY => {
+                a.caption_buttons.set([HWND::default(); 3]);
                 a.service_button.set(HWND::default());
                 a.settings_button.set(HWND::default());
                 let settings = a.settings.replace(HWND::default());

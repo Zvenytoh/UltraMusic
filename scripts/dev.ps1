@@ -44,6 +44,9 @@ try {
         audit { & (Join-Path $PSScriptRoot 'audit.ps1') }
     }
     if ($LASTEXITCODE -ne 0) { throw "Cargo failed ($LASTEXITCODE)." }
+    if ($Task -eq 'build') {
+        & (Join-Path $PSScriptRoot 'prepare-blocker.ps1') -Destination (Join-Path $root 'target/release/blocker')
+    }
     if ($Task -eq 'build' -and $localToolchain) {
         $loader = Get-ChildItem "$root\target\release\build\webview2-com-sys-*\out\x64\WebView2Loader.dll" |
             Select-Object -First 1

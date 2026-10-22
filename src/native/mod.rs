@@ -1,6 +1,7 @@
 //! Windows host: STA lifetime, application state, and the blocking message loop.
 //! Child modules never hold a RefCell borrow across a Win32/COM call.
 
+mod blocker;
 mod chrome;
 mod commands;
 mod drawing;
@@ -58,7 +59,14 @@ struct App {
     icon: HICON,
     service_button: Cell<HWND>,
     settings_button: Cell<HWND>,
+    caption_buttons: Cell<[HWND; 3]>,
     settings: Cell<HWND>,
+    blocker_enabled: Cell<bool>,
+    blocker_busy: Cell<bool>,
+    blocker_state: Cell<blocker::State>,
+    blocker: RefCell<
+        Option<webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2BrowserExtension>,
+    >,
     service: Cell<Service>,
     profile: HSTRING,
     controller: RefCell<Option<ICoreWebView2Controller>>,
@@ -153,7 +161,12 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             icon,
             service_button: Cell::new(HWND::default()),
             settings_button: Cell::new(HWND::default()),
+            caption_buttons: Cell::new([HWND::default(); 3]),
             settings: Cell::new(HWND::default()),
+            blocker_enabled: Cell::new(blocker::load_preference()),
+            blocker_busy: Cell::new(false),
+            blocker_state: Cell::new(blocker::State::Loading),
+            blocker: RefCell::new(None),
             keep_rendering: Cell::new(config.keep_rendering),
             service: Cell::new(config.service),
             profile: HSTRING::from(profile.as_os_str()),

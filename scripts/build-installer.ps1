@@ -11,6 +11,7 @@ $compiler = Get-ChildItem -Path @(
 if (-not $compiler) { throw 'Install Inno Setup 6 or later before building the installer.' }
 $version = [regex]::Match((Get-Content (Join-Path $root 'Cargo.toml') -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
 if (-not $version) { throw 'The Cargo package version is missing.' }
+& (Join-Path $PSScriptRoot 'prepare-blocker.ps1')
 $dependencies = Join-Path $root 'target/dependencies'
 New-Item -ItemType Directory -Force $dependencies | Out-Null
 $bootstrapper = Join-Path $dependencies 'MicrosoftEdgeWebview2Setup.exe'

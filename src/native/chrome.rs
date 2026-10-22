@@ -1,4 +1,4 @@
-//! DPI-aware native header. DWM retains caption buttons and Snap behavior.
+//! DPI-aware header with explicit native caption controls and Snap hit testing.
 use super::{commands::*, drawing::*, App};
 use crate::config::Service;
 use std::mem::size_of;
@@ -89,6 +89,11 @@ unsafe extern "system" fn button_proc(
     // SAFETY: Windows invokes this only for a live subclassed BUTTON.
     unsafe {
         match msg {
+            WM_NCHITTEST if matches!(GetDlgCtrlID(hwnd) as usize, MINIMIZE | MAXIMIZE | CLOSE) => {
+                // Let the parent expose HTMAXBUTTON for Windows Snap. Mouse presses
+                // are forwarded back to this BUTTON for its native capture behavior.
+                return LRESULT(HTTRANSPARENT as isize);
+            }
             WM_NOTIFY => {
                 let header = &*(lp.0 as *const NMHDR);
                 if header.code == TTN_GETDISPINFOW {
@@ -132,13 +137,28 @@ pub(super) fn button_background(item: &DRAWITEMSTRUCT) {
         let hovered = GetCursorPos(&mut point).is_ok()
             && GetWindowRect(item.hwndItem, &mut bounds).is_ok()
             && PtInRect(&bounds, point).as_bool();
-        let color = if hovered || item.itemState.0 & ODS_SELECTED.0 != 0 {
+        let caption = matches!(item.CtlID as usize, MINIMIZE | MAXIMIZE | CLOSE);
+        let color = if (hovered || item.itemState.0 & ODS_SELECTED.0 != 0)
+            && item.CtlID as usize == CLOSE
+        {
+            windows::Win32::Foundation::COLORREF(0x2311C4)
+        } else if hovered || item.itemState.0 & ODS_SELECTED.0 != 0 {
             HOVER
-        } else if item.CtlID as usize == SETTINGS {
+        } else if item.CtlID as usize == SETTINGS || caption {
             BLACK
         } else {
             PANEL
         };
+        if caption {
+            fill(item.hDC, &item.rcItem, color);
+            if item.itemState.0 & ODS_FOCUS.0 != 0 {
+                let mut focus = item.rcItem;
+                let edge = px(item.hwndItem, 5);
+                let _ = InflateRect(&mut focus, -edge, -edge);
+                let _ = DrawFocusRect(item.hDC, &focus);
+            }
+            return;
+        }
         fill(item.hDC, &item.rcItem, BLACK);
         round(
             item.hDC,
@@ -183,8 +203,9 @@ impl App {
                 return false;
             }
             let focus = GetFocus();
-            let in_header =
-                focus == self.service_button.get() || focus == self.settings_button.get();
+            let in_header = focus == self.service_button.get()
+                || focus == self.settings_button.get()
+                || self.caption_buttons.get().contains(&focus);
             if message.message == WM_KEYDOWN {
                 if message.wParam.0 == VK_F6.0 as usize {
                     if in_header {
@@ -232,6 +253,19 @@ impl App {
             .set(button(self.hwnd, PICKER, "Choisir le service")?);
         self.settings_button
             .set(button(self.hwnd, SETTINGS, "Paramètres")?);
+        // Store each handle immediately so partial initialization is cleaned up normally.
+        for (index, (id, label)) in [
+            (MINIMIZE, "Réduire"),
+            (MAXIMIZE, "Maximiser"),
+            (CLOSE, "Fermer dans la zone de notification"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut buttons = self.caption_buttons.get();
+            buttons[index] = button(self.hwnd, id, label)?;
+            self.caption_buttons.set(buttons);
+        }
         self.extend_frame();
         // SAFETY: recalculate nonclient layout now that App exists for WM_NCCALCSIZE.
         unsafe {
@@ -256,29 +290,11 @@ impl App {
             let _ = DwmExtendFrameIntoClientArea(
                 self.hwnd,
                 &MARGINS {
-                    // The full caption height is needed for DWM to draw its buttons.
-                    cyTopHeight: px(self.hwnd, HEIGHT),
+                    // Caption controls are opaque child windows, independent of DWM offsets.
+                    cyTopHeight: 1,
                     ..Default::default()
                 },
             );
-        }
-    }
-
-    fn caption_width(&self) -> i32 {
-        let mut bounds = RECT::default();
-        // SAFETY: DWM writes only the supplied RECT buffer.
-        let result = unsafe {
-            DwmGetWindowAttribute(
-                self.hwnd,
-                DWMWA_CAPTION_BUTTON_BOUNDS,
-                &mut bounds as *mut _ as *mut _,
-                size_of::<RECT>() as u32,
-            )
-        };
-        if result.is_ok() && bounds.right > bounds.left {
-            bounds.right - bounds.left
-        } else {
-            px(self.hwnd, 138)
         }
     }
 
@@ -287,7 +303,30 @@ impl App {
         unsafe {
             let mut bounds = RECT::default();
             let _ = GetClientRect(self.hwnd, &mut bounds);
-            let x = bounds.right - self.caption_width() - px(self.hwnd, 40);
+            let caption_width = px(self.hwnd, 46);
+            for (index, child) in self.caption_buttons.get().into_iter().enumerate() {
+                let _ = SetWindowPos(
+                    child,
+                    None,
+                    bounds.right - caption_width * (3 - index as i32),
+                    0,
+                    caption_width,
+                    px(self.hwnd, HEIGHT),
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                if index == 1 {
+                    let _ = SetWindowTextW(
+                        child,
+                        if IsZoomed(self.hwnd).as_bool() {
+                            w!("Restaurer")
+                        } else {
+                            w!("Maximiser")
+                        },
+                    );
+                }
+                let _ = InvalidateRect(Some(child), None, false);
+            }
+            let x = bounds.right - caption_width * 3 - px(self.hwnd, 40);
             let _ = SetWindowPos(
                 self.settings_button.get(),
                 None,
@@ -368,7 +407,23 @@ impl App {
     pub(super) fn draw_header_button(&self, item: &DRAWITEMSTRUCT) {
         let hwnd = item.hwndItem;
         button_background(item);
-        if item.CtlID as usize == SETTINGS {
+        if matches!(item.CtlID as usize, MINIMIZE | MAXIMIZE | CLOSE) {
+            let glyph = match item.CtlID as usize {
+                MINIMIZE => Icon::Minimize,
+                CLOSE => Icon::Close,
+                // SAFETY: this window belongs to the paint thread.
+                _ if unsafe { IsZoomed(self.hwnd).as_bool() } => Icon::Restore,
+                _ => Icon::Maximize,
+            };
+            icon(
+                item.hDC,
+                hwnd,
+                glyph,
+                (item.rcItem.right - px(hwnd, 22)) / 2,
+                (item.rcItem.bottom - px(hwnd, 22)) / 2,
+                WHITE,
+            );
+        } else if item.CtlID as usize == SETTINGS {
             icon(item.hDC, hwnd, Icon::Gear, px(hwnd, 3), px(hwnd, 3), WHITE);
         } else {
             icon(
@@ -401,13 +456,36 @@ impl App {
     pub(super) fn chrome_message(&self, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESULT> {
         // SAFETY: message-specific pointers come from Windows and live for this dispatch.
         unsafe {
-            // DWM needs caption mouse/paint messages too, not only hit testing.
-            // Our layout and client painting still take precedence below.
-            let mut dwm_result = LRESULT(0);
-            let dwm_handled = DwmDefWindowProc(self.hwnd, msg, wp, lp, &mut dwm_result).as_bool();
-            if dwm_handled && !matches!(msg, WM_NCCALCSIZE | WM_PAINT | WM_GETMINMAXINFO) {
-                return Some(dwm_result);
+            if msg == WM_NCHITTEST {
+                if let Some((_, hit)) = self.caption_hit(lp) {
+                    return Some(LRESULT(hit as isize));
+                }
             }
+            if matches!(msg, WM_NCMOUSEMOVE | WM_NCMOUSELEAVE) {
+                for button in self.caption_buttons.get() {
+                    let _ = InvalidateRect(Some(button), None, false);
+                }
+                if msg == WM_NCMOUSEMOVE {
+                    let mut track = TRACKMOUSEEVENT {
+                        cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
+                        dwFlags: TME_LEAVE | TME_NONCLIENT,
+                        hwndTrack: self.hwnd,
+                        ..Default::default()
+                    };
+                    let _ = TrackMouseEvent(&mut track);
+                    if let Some((button, _)) = self.caption_hit(lp) {
+                        self.caption_mouse(button, WM_MOUSEMOVE, lp);
+                    }
+                }
+            }
+            if matches!(msg, WM_NCLBUTTONDOWN | WM_NCLBUTTONDBLCLK) {
+                if let Some((button, _)) = self.caption_hit(lp) {
+                    self.caption_mouse(button, WM_LBUTTONDOWN, lp);
+                    return Some(LRESULT(0));
+                }
+            }
+            // These controls own caption input. Delegating hit testing back to
+            // DWM would reintroduce invisible caption regions at different offsets.
             match msg {
                 WM_NCCALCSIZE if wp.0 != 0 => {
                     if IsZoomed(self.hwnd).as_bool() {
@@ -554,6 +632,50 @@ impl App {
             }
         }
         None
+    }
+
+    fn caption_hit(&self, position: LPARAM) -> Option<(HWND, u32)> {
+        let point = POINT {
+            x: position.0 as i16 as i32,
+            y: (position.0 >> 16) as i16 as i32,
+        };
+        // SAFETY: rectangles are read from our actual live child windows, in screen space.
+        unsafe {
+            for (button, hit) in
+                self.caption_buttons
+                    .get()
+                    .into_iter()
+                    .zip([HTMINBUTTON, HTMAXBUTTON, HTCLOSE])
+            {
+                let mut bounds = RECT::default();
+                if !button.is_invalid()
+                    && GetWindowRect(button, &mut bounds).is_ok()
+                    && PtInRect(&bounds, point).as_bool()
+                {
+                    return Some((button, hit));
+                }
+            }
+        }
+        None
+    }
+
+    fn caption_mouse(&self, button: HWND, message: u32, screen: LPARAM) {
+        let mut point = POINT {
+            x: screen.0 as i16 as i32,
+            y: (screen.0 >> 16) as i16 as i32,
+        };
+        // SAFETY: synchronous forwarding uses only scalar coordinates. BUTTON owns capture,
+        // cancellation and release-outside behavior; no manual pressed-state machine is needed.
+        unsafe {
+            let _ = ScreenToClient(button, &mut point);
+            let packed = ((point.y as u16 as u32) << 16) | point.x as u16 as u32;
+            SendMessageW(
+                button,
+                message,
+                Some(WPARAM(usize::from(message == WM_LBUTTONDOWN))),
+                Some(LPARAM(packed as isize)),
+            );
+        }
     }
 }
 

@@ -17,12 +17,20 @@ use windows::{
 };
 
 const CLASS: windows::core::PCWSTR = w!("UltraMusic.Settings.1");
-const ROWS: [(usize, &str, i32, i32, i32, i32); 5] = [
+const ROWS: [(usize, &str, i32, i32, i32, i32); 6] = [
     (VOLUME_DOWN, "Diminuer le volume", 24, 92, 36, 36),
     (VOLUME_UP, "Augmenter le volume", 396, 92, 36, 36),
     (MUTE, "Couper le son", 24, 150, 408, 44),
     (COMPAT, "Conserver le rendu", 24, 234, 408, 48),
-    (UPDATE, "Vérifier les mises à jour", 24, 374, 408, 42),
+    (
+        BLOCKER,
+        "Bloquer les publicités YouTube — recharge le lecteur",
+        24,
+        354,
+        408,
+        44,
+    ),
+    (UPDATE, "Vérifier les mises à jour", 24, 494, 408, 42),
 ];
 
 impl App {
@@ -48,7 +56,7 @@ impl App {
             // Reopening uses the same registered class.
             RegisterClassW(&class);
             let style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
-            let mut bounds = rect(0, 0, px(self.hwnd, 456), px(self.hwnd, 440));
+            let mut bounds = rect(0, 0, px(self.hwnd, 456), px(self.hwnd, 560));
             let _ = AdjustWindowRectExForDpi(
                 &mut bounds,
                 style,
@@ -116,6 +124,14 @@ impl App {
             }
             for (id, label) in [
                 (
+                    BLOCKER,
+                    if self.blocker_enabled.get() {
+                        "Bloqueur YouTube : activé — recharge le lecteur"
+                    } else {
+                        "Bloqueur YouTube : désactivé — recharge le lecteur"
+                    },
+                ),
+                (
                     MUTE,
                     if self.muted.get() {
                         "Réactiver le son"
@@ -150,7 +166,7 @@ impl App {
 
     fn paint_settings(&self, hwnd: HWND, dc: HDC) {
         let r = |x, y, w, h| rect(px(hwnd, x), px(hwnd, y), px(hwnd, w), px(hwnd, h));
-        fill(dc, &r(0, 0, 456, 440), BLACK);
+        fill(dc, &r(0, 0, 456, 560), BLACK);
         text(dc, hwnd, "Audio", r(24, 18, 408, 28), 19, WHITE);
         text(
             dc,
@@ -194,12 +210,28 @@ impl App {
             11,
             MUTED,
         );
-        text(dc, hwnd, "Application", r(24, 326, 408, 24), 13, MUTED);
+        text(
+            dc,
+            hwnd,
+            "Protection YouTube",
+            r(24, 326, 408, 24),
+            13,
+            MUTED,
+        );
+        text(
+            dc,
+            hwnd,
+            self.blocker_status(),
+            r(24, 402, 408, 24),
+            11,
+            MUTED,
+        );
+        text(dc, hwnd, "Application", r(24, 446, 408, 24), 13, MUTED);
         text(
             dc,
             hwnd,
             concat!("UltraMusic ", env!("CARGO_PKG_VERSION")),
-            r(24, 350, 408, 20),
+            r(24, 470, 408, 20),
             12,
             WHITE,
         );
@@ -223,8 +255,9 @@ impl App {
                 WHITE,
             );
         } else {
-            let selected =
-                (id == MUTE && self.muted.get()) || (id == COMPAT && self.keep_rendering.get());
+            let selected = (id == MUTE && self.muted.get())
+                || (id == COMPAT && self.keep_rendering.get())
+                || (id == BLOCKER && self.blocker_enabled.get());
             if selected {
                 icon(
                     item.hDC,
@@ -244,6 +277,7 @@ impl App {
                     }
                 }
                 COMPAT => "Conserver le rendu",
+                BLOCKER => "Bloquer les publicités YouTube",
                 _ => {
                     if self.update_busy.get() {
                         "Afficher le résultat de la vérification…"

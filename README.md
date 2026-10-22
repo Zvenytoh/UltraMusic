@@ -4,9 +4,9 @@
   <p><strong>Your music. A native Windows home.</strong></p>
   <p>Apple Music, YouTube Music and YouTube in one focused desktop player.</p>
   <p>
-    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.3.2/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.0/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
   </p>
-  <p>Windows 11 · x64 · Version 0.3.2</p>
+  <p>Windows 11 · x64 · Version 0.4.0</p>
   <p>
     <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
@@ -47,6 +47,8 @@ installed WebView2 runtime rather than shipping a separate browser engine.
   available in the notification area.
 - **Controls within reach** — play/pause, application volume and mute from the
   tray menu, without bringing the player window forward.
+- **YouTube ad blocking** — bundled uBO Lite for YouTube and YouTube Music,
+  with a remembered switch and module status in Settings.
 - **Persistent sign-in** — the same local WebView2 profile is reused between sessions.
 - **One active instance** — opening UltraMusic again restores the existing window.
 - **In-app updates** — a startup check, explicit installation confirmation and
@@ -56,7 +58,7 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Installation
 
-1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.3.2/UltraMusic-Setup.exe)**.
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.0/UltraMusic-Setup.exe)**.
 2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
 3. Open **UltraMusic** from the Start menu.
 
@@ -67,7 +69,7 @@ runtime using Microsoft's bootstrapper. An Internet connection is required.
 Remove the application through **Windows Settings → Apps → Installed apps**.
 Your music service session data is kept separately from the program files.
 
-[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.3.2)
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.4.0)
 
 ## Everyday controls
 
@@ -122,6 +124,26 @@ Quit the active instance before using a command-line override. A second launch
 restores that instance instead of changing its provider. Sign-in, subscriptions, DRM
 and available playback features are managed by the music service.
 
+## Ad blocking
+
+UltraMusic includes **uBO Lite** for YouTube and YouTube Music. Its bundled
+filter lists and content scripts run through WebView2's extension support.
+The module is disabled when switching to Apple Music.
+
+Open **Settings → Protection YouTube** to enable or disable it. Changing the
+setting reloads the current page and may interrupt playback. The setting is
+remembered between launches. Settings reports whether the extension module is
+initializing, enabled, disabled or unavailable; “enabled” describes the module,
+not a guarantee that every advertisement is removed.
+
+The installer includes a pinned upstream package, verified during packaging.
+Blocker updates are delivered with UltraMusic releases. No additional browser
+extension download or ZIP installation is required.
+
+YouTube changes and WebView2 compatibility can affect filtering. Complete or
+permanent ad removal is not guaranteed. Provider subscriptions and DRM remain
+unchanged. See [third-party notices](THIRD_PARTY.md) for version, source and license.
+
 ## Updates
 
 UltraMusic checks published releases once when it starts. If a newer compatible
@@ -156,6 +178,8 @@ actual resource usage depends on the provider and the runtime.
 - The chosen service is saved locally in `%LOCALAPPDATA%\UltraMusic\service.txt`.
 - No custom analytics or application log files are produced by the host.
 - Remote pages have no Rust host objects or native message bridge.
+- The bundled blocker can inspect/filter Google-service requests and inject its
+  filtering scripts when enabled. Its code is shipped locally with UltraMusic.
 - Requests for camera, microphone, location, clipboard reading and other device
   permissions unrelated to playback are denied. Page downloads are cancelled.
 - External HTTPS links opened by the user require confirmation.
@@ -174,6 +198,7 @@ x64. Building the installer additionally requires **Inno Setup 6**.
 git clone https://github.com/Zvenytoh/UltraMusic.git
 cd UltraMusic
 cargo build --release --locked
+.\scripts\prepare-blocker.ps1 -Destination "target/release/blocker"
 .\target\release\ultramusic.exe
 
 # Build the Windows installer
@@ -208,8 +233,9 @@ Never include passwords, cookies or a copied WebView2 profile.
 
 ## License
 
-UltraMusic is released under the [MIT license](LICENSE). The original project
-artwork is included under the same license.
+UltraMusic’s Rust host and original artwork are released under the
+[MIT license](LICENSE). The bundled uBO Lite extension has its own GPL-3.0-or-later
+license; see [third-party notices](THIRD_PARTY.md).
 
 UltraMusic is independent of Apple, Google, YouTube and Microsoft. Service names
 and trademarks belong to their respective owners.

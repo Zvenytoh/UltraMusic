@@ -2,15 +2,16 @@
 use super::{current, App, EXTERNAL, FAILED, HEADER_ACTION};
 use crate::config::external_url;
 use webview2_com::{
-    AcceleratorKeyPressedEventHandler, CoTaskMemPWSTR,
+    AcceleratorKeyPressedEventHandler, CoTaskMemPWSTR, CoreWebView2EnvironmentOptions,
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
     DownloadStartingEventHandler,
     Microsoft::Web::WebView2::Win32::{
-        CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller, ICoreWebView2_4,
-        COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN, COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN,
-        COREWEBVIEW2_PERMISSION_KIND_CAMERA, COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ,
-        COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE, COREWEBVIEW2_PERMISSION_KIND_GEOLOCATION,
-        COREWEBVIEW2_PERMISSION_KIND_LOCAL_FONTS, COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
+        CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
+        ICoreWebView2EnvironmentOptions, ICoreWebView2_4, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN,
+        COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, COREWEBVIEW2_PERMISSION_KIND_CAMERA,
+        COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ, COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE,
+        COREWEBVIEW2_PERMISSION_KIND_GEOLOCATION, COREWEBVIEW2_PERMISSION_KIND_LOCAL_FONTS,
+        COREWEBVIEW2_PERMISSION_KIND_MICROPHONE,
         COREWEBVIEW2_PERMISSION_KIND_MIDI_SYSTEM_EXCLUSIVE_MESSAGES,
         COREWEBVIEW2_PERMISSION_KIND_MULTIPLE_AUTOMATIC_DOWNLOADS,
         COREWEBVIEW2_PERMISSION_KIND_NOTIFICATIONS, COREWEBVIEW2_PERMISSION_KIND_OTHER_SENSORS,
@@ -33,6 +34,10 @@ impl App {
     pub(super) fn close_webview(&self) {
         self.generation.set(self.generation.get().wrapping_add(1));
         self.external.borrow_mut().take();
+        self.blocker_busy.set(false);
+        self.blocker_state.set(super::blocker::State::Loading);
+        let extension = self.blocker.borrow_mut().take();
+        drop(extension);
         let controller = self.controller.borrow_mut().take();
         if let Some(c) = controller {
             // SAFETY: c is an owned STA reference and the RefCell borrow has ended.
@@ -108,8 +113,14 @@ impl App {
                 }
                 Ok(())
             }));
-        // SAFETY: profile is a valid UTF-16 string and WebView2 retains the callback.
-        unsafe { CreateCoreWebView2EnvironmentWithOptions(None, &self.profile, None, &handler) }
+        let options = CoreWebView2EnvironmentOptions::default();
+        // SAFETY: options are confined to this STA and have not yet been exposed to COM.
+        unsafe {
+            options.set_are_browser_extensions_enabled(true);
+        }
+        let options: ICoreWebView2EnvironmentOptions = options.into();
+        // SAFETY: profile/options live through the call; WebView2 retains its callback.
+        unsafe { CreateCoreWebView2EnvironmentWithOptions(None, &self.profile, &options, &handler) }
     }
     fn configure(&self, controller: &ICoreWebView2Controller, generation: usize) -> WinResult<()> {
         // SAFETY: the controller and event arguments belong to this STA. Uri strings
@@ -252,7 +263,7 @@ impl App {
                 })),
                 &mut token,
             )?;
-            web.Navigate(&HSTRING::from(self.service.get().home()))?;
+            self.begin_blocker(generation, false);
         }
         Ok(())
     }

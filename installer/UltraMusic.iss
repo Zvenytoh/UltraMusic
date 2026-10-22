@@ -34,6 +34,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 [Files]
 Source: "..\target\release\ultramusic.exe"; DestDir: "{app}"; DestName: "UltraMusic.exe"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\THIRD_PARTY.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\target\dependencies\blocker\*"; DestDir: "{app}\blocker"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\target\dependencies\MicrosoftEdgeWebview2Setup.exe"; Flags: dontcopy
 
 [Icons]

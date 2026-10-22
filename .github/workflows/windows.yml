@@ -59,7 +59,9 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
-          - Corrected DWM caption frame and message handling for native window buttons.
+          - Bundled uBO Lite for YouTube and YouTube Music, with a remembered settings switch.
+          - Blocker initialization status and a disable-and-reload action.
+          - Explicit native window buttons with consistent maximized-window hit testing.
           - A compact 40-pixel header, 28-pixel controls and antialiased system icons.
           - Quieter hover states, a shorter service picker and reduced visual clutter.
           - Installer compatibility with legacy updaters that pass extended Windows paths.
