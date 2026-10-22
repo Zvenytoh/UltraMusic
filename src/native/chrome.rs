@@ -10,7 +10,9 @@ use windows::{
     },
 };
 pub(super) const PICKER: usize = 20;
-pub(super) const HEIGHT: i32 = 40;
+pub(super) const HEIGHT: i32 = 44;
+const BUTTON_WIDTH: i32 = 40;
+const BUTTON_HEIGHT: i32 = 32;
 // TB_SETBKCOLOR is the toolbar alias for this common-controls message.
 const TB_SETBKCOLOR: u32 = CCM_SETBKCOLOR;
 fn send(hwnd: HWND, msg: u32, wp: usize, lp: isize) -> LRESULT {
@@ -35,7 +37,6 @@ impl App {
                     | WS_TABSTOP
                     | WINDOW_STYLE(
                         TBSTYLE_FLAT
-                            | TBSTYLE_LIST
                             | TBSTYLE_TOOLTIPS
                             | CCS_NORESIZE as u32
                             | CCS_NOPARENTALIGN as u32
@@ -51,6 +52,14 @@ impl App {
                 None,
             )?;
             self.toolbar.set(toolbar);
+            let horizontal = px(self.hwnd, BUTTON_WIDTH - 16) as u32;
+            let vertical = px(self.hwnd, BUTTON_HEIGHT - 16) as u32;
+            send(
+                toolbar,
+                TB_SETPADDING,
+                0,
+                ((vertical << 16) | horizontal) as isize,
+            );
             let _ = SetWindowTheme(toolbar, w!(""), w!(""));
             send(
                 toolbar,
@@ -59,18 +68,26 @@ impl App {
                 self.colors().background.0 as isize,
             );
             send(toolbar, TB_BUTTONSTRUCTSIZE, size_of::<TBBUTTON>(), 0);
+            // Icon-only buttons retain their labels for tooltips and accessibility.
+            send(toolbar, TB_SETMAXTEXTROWS, 0, 0);
+            let width = px(self.hwnd, BUTTON_WIDTH) as u32;
+            send(
+                toolbar,
+                TB_SETBUTTONWIDTH,
+                0,
+                ((width << 16) | width) as isize,
+            );
             send(
                 toolbar,
                 TB_SETEXTENDEDSTYLE,
                 0,
-                (TBSTYLE_EX_MIXEDBUTTONS | TBSTYLE_EX_DRAWDDARROWS | TBSTYLE_EX_DOUBLEBUFFER)
-                    as isize,
+                TBSTYLE_EX_DOUBLEBUFFER as isize,
             );
             let mut buttons = Vec::new();
             for (id, image, style, label) in [
                 (BACK, 0, BTNS_BUTTON, "Retour"),
                 (FORWARD, 1, BTNS_BUTTON, "Avancer"),
-                (PICKER, 2, BTNS_WHOLEDROPDOWN, "Choisir le service"),
+                (PICKER, 2, BTNS_BUTTON, "Choisir le service"),
                 (SETTINGS, 3, BTNS_BUTTON, "Paramètres"),
             ] {
                 let label: Vec<u16> = label.encode_utf16().chain([0, 0]).collect();
@@ -121,48 +138,47 @@ impl App {
             0,
             ((image_size << 16) | image_size) as isize,
         );
-        let size = px(self.hwnd, 28) as u32;
-        send(toolbar, TB_SETBUTTONSIZE, 0, ((size << 16) | size) as isize);
+        let width = px(self.hwnd, BUTTON_WIDTH) as u32;
+        let height = px(self.hwnd, BUTTON_HEIGHT) as u32;
+        send(
+            toolbar,
+            TB_SETBUTTONWIDTH,
+            0,
+            ((width << 16) | width) as isize,
+        );
+        send(
+            toolbar,
+            TB_SETBUTTONSIZE,
+            0,
+            ((height << 16) | width) as isize,
+        );
         let old = self.ui.replace(Some(resources));
         drop(old);
         self.layout_chrome();
         Ok(())
-    }
-    fn toolbar_width(&self, id: usize, width: i32) {
-        let info = TBBUTTONINFOW {
-            cbSize: size_of::<TBBUTTONINFOW>() as u32,
-            dwMask: TBIF_SIZE,
-            cx: width.max(0).min(u16::MAX as i32) as u16,
-            ..Default::default()
-        };
-        send(
-            self.toolbar.get(),
-            TB_SETBUTTONINFOW,
-            id,
-            &info as *const _ as isize,
-        );
     }
     pub(super) fn layout_chrome(&self) {
         let toolbar = self.toolbar.get();
         if toolbar.is_invalid() {
             return;
         }
-        // SAFETY: GDI selection and DC borrowing are balanced on the UI thread.
+        // SAFETY: toolbar messages borrow stack rectangles synchronously on the UI thread.
         unsafe {
-            let mut bounds = RECT::default();
-            let _ = GetClientRect(self.hwnd, &mut bounds);
-            self.toolbar_width(BACK, px(self.hwnd, 28));
-            self.toolbar_width(FORWARD, px(self.hwnd, 28));
-            self.toolbar_width(PICKER, px(self.hwnd, 36));
-            self.toolbar_width(SETTINGS, px(self.hwnd, 28));
             send(toolbar, TB_AUTOSIZE, 0, 0);
+            let mut last = RECT::default();
+            send(toolbar, TB_GETRECT, SETTINGS, &mut last as *mut _ as isize);
+            let height = (last.bottom - last.top).max(px(self.hwnd, BUTTON_HEIGHT));
+            // Use DWM's actual centre in both restored and maximized windows, including DPI insets.
+            let center = self
+                .caption_bounds()
+                .map_or(px(self.hwnd, HEIGHT) / 2, |r| (r.top + r.bottom) / 2);
             let _ = SetWindowPos(
                 toolbar,
                 None,
                 px(self.hwnd, 12),
-                px(self.hwnd, 6),
-                px(self.hwnd, 120),
-                px(self.hwnd, 28),
+                center - height / 2,
+                last.right.max(1),
+                height,
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
             let _ = InvalidateRect(Some(self.hwnd), None, false);
@@ -364,7 +380,10 @@ impl App {
                     let dc = BeginPaint(self.hwnd, &mut paint);
                     let mut r = RECT::default();
                     let _ = GetClientRect(self.hwnd, &mut r);
-                    super::theme::fill(dc, &r, self.colors().background);
+                    super::theme::opaque(dc, &r, |target| {
+                        super::theme::fill(target, &r, self.colors().background)
+                    });
+                    self.clear_caption_surface(dc);
                     let _ = EndPaint(self.hwnd, &paint);
                     Some(LRESULT(0))
                 }

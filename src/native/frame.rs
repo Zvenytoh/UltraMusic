@@ -11,6 +11,46 @@ use windows::Win32::{
     },
 };
 impl App {
+    pub(super) fn caption_bounds(&self) -> Option<RECT> {
+        // SAFETY: DWM writes a RECT; the synchronous conversion stays on the owning UI thread.
+        unsafe {
+            let mut caption = RECT::default();
+            if DwmGetWindowAttribute(
+                self.hwnd,
+                DWMWA_CAPTION_BUTTON_BOUNDS,
+                (&mut caption as *mut RECT).cast(),
+                size_of::<RECT>() as u32,
+            )
+            .is_err()
+            {
+                return None;
+            }
+            let mut window = RECT::default();
+            GetWindowRect(self.hwnd, &mut window).ok()?;
+            let mut origin = POINT {
+                x: window.left,
+                y: window.top,
+            };
+            let _ = ScreenToClient(self.hwnd, &mut origin);
+            // Maximization clips the resize frame, while DWM keeps its caption bounds uninset.
+            if IsZoomed(self.hwnd).as_bool() {
+                let dpi = GetDpiForWindow(self.hwnd);
+                origin.y += GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi)
+                    + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+            }
+            caption.left += origin.x;
+            caption.right += origin.x;
+            caption.top += origin.y;
+            caption.bottom += origin.y;
+            (caption.right > caption.left && caption.bottom > caption.top).then_some(caption)
+        }
+    }
+    pub(super) fn clear_caption_surface(&self, dc: HDC) {
+        if let Some(caption) = self.caption_bounds() {
+            // Zero-alpha black exposes the native DWM caption buttons above our painted surface.
+            super::theme::fill(dc, &caption, windows::Win32::Foundation::COLORREF(0));
+        }
+    }
     pub(super) fn configure_frame(&self) {
         // SAFETY: all frame updates are synchronous and confined to the owning UI thread.
         unsafe {
@@ -62,7 +102,7 @@ impl App {
                     let mut client = point;
                     let _ = ScreenToClient(self.hwnd, &mut client);
                     let default = DefWindowProcW(self.hwnd, msg, wp, lp);
-                    if default.0 != HTCLIENT as isize {
+                    if default.0 != HTCLIENT as isize && default.0 != HTCAPTION as isize {
                         return Some(default);
                     }
                     if !IsZoomed(self.hwnd).as_bool() && client.y < px(self.hwnd, 6) {
@@ -77,23 +117,13 @@ impl App {
                         } as isize));
                     }
                     // Reserve the exact DWM caption rectangle even if the toolbar is resized.
-                    let mut caption = RECT::default();
-                    if DwmGetWindowAttribute(
-                        self.hwnd,
-                        DWMWA_CAPTION_BUTTON_BOUNDS,
-                        (&mut caption as *mut RECT).cast(),
-                        size_of::<RECT>() as u32,
-                    )
-                    .is_ok()
-                    {
-                        let mut window = RECT::default();
-                        let _ = GetWindowRect(self.hwnd, &mut window);
-                        if point.x >= window.left + caption.left
-                            && point.x < window.left + caption.right
-                            && point.y >= window.top + caption.top
-                            && point.y < window.top + caption.bottom
+                    if let Some(caption) = self.caption_bounds() {
+                        if client.x >= caption.left
+                            && client.x < caption.right
+                            && client.y >= caption.top
+                            && client.y < caption.bottom
                         {
-                            let slot = (point.x - window.left - caption.left) * 3
+                            let slot = (client.x - caption.left) * 3
                                 / (caption.right - caption.left).max(1);
                             return Some(LRESULT(match slot {
                                 0 => HTMINBUTTON,

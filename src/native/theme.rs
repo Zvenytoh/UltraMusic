@@ -7,7 +7,7 @@ use windows::{
         Foundation::{COLORREF, HWND, RECT},
         Graphics::{Dwm::*, Gdi::*},
         System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_SINGLETHREADED},
-        UI::{Accessibility::*, WindowsAndMessaging::*},
+        UI::{Accessibility::*, Controls::*, WindowsAndMessaging::*},
     },
     UI::ViewManagement::{UIColorType, UISettings},
 };
@@ -263,5 +263,21 @@ impl App {
             let _ = GetClientRect(self.settings.get(), &mut bounds);
         }
         fill(dc, &bounds, self.colors().background);
+    }
+}
+
+/// GDI normally clears alpha; DWM's extended title surface needs opaque pixels.
+pub(super) fn opaque(dc: HDC, bounds: &RECT, paint: impl FnOnce(HDC)) {
+    // SAFETY: PaintRuntime initializes this STA. The temporary buffer is ended before returning.
+    unsafe {
+        let mut buffer_dc = HDC::default();
+        let buffer = BeginBufferedPaint(dc, bounds, BPBF_TOPDOWNDIB, None, &mut buffer_dc);
+        if buffer == 0 {
+            paint(dc);
+            return;
+        }
+        paint(buffer_dc);
+        let _ = BufferedPaintSetAlpha(buffer, None, 255);
+        let _ = EndBufferedPaint(buffer, true);
     }
 }

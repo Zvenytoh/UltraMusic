@@ -2,7 +2,7 @@
 
 use std::mem::size_of;
 use windows::{
-    core::{w, Error, Result},
+    core::{Error, Result},
     Win32::{
         Foundation::{COLORREF, HWND},
         Graphics::Gdi::*,
@@ -26,7 +26,7 @@ impl Font {
         Self::styled(hwnd, 0, false)
     }
     pub(super) fn settings(hwnd: HWND, heading: bool) -> Result<Self> {
-        Self::styled(hwnd, if heading { 18 } else { 14 }, heading)
+        Self::styled(hwnd, if heading { 16 } else { 14 }, heading)
     }
     fn styled(hwnd: HWND, minimum: i32, heading: bool) -> Result<Self> {
         // SAFETY: Windows fills a correctly sized structure for this window's DPI.
@@ -50,8 +50,9 @@ impl Font {
                     -metrics.lfMessageFont.lfHeight.abs().max(px(hwnd, minimum));
             }
             if heading {
-                metrics.lfMessageFont.lfWeight = FW_SEMIBOLD.0 as i32;
+                metrics.lfMessageFont.lfWeight = FW_MEDIUM.0 as i32;
             }
+            metrics.lfMessageFont.lfQuality = CLEARTYPE_QUALITY;
             let font = CreateFontIndirectW(&metrics.lfMessageFont);
             if font.is_invalid() {
                 return Err(Error::from_thread());
@@ -93,10 +94,9 @@ impl Resources {
                 return Err(Error::from_thread());
             }
             let resources = Self { font, images };
-            add_glyph(hwnd, images, '\u{E72B}', color)?;
-            add_glyph(hwnd, images, '\u{E72A}', color)?;
-            add_glyph(hwnd, images, '\u{E8A5}', color)?;
-            add_glyph(hwnd, images, '\u{E713}', color)?;
+            for icon in [Icon::Back, Icon::Forward, Icon::Workspace, Icon::Settings] {
+                add_icon(hwnd, images, icon, color)?;
+            }
             Ok(resources)
         }
     }
@@ -109,19 +109,29 @@ impl Drop for Resources {
         }
     }
 }
-fn add_glyph(hwnd: HWND, images: HIMAGELIST, glyph: char, color: COLORREF) -> Result<()> {
+#[derive(Clone, Copy)]
+enum Icon {
+    Back,
+    Forward,
+    Workspace,
+    Settings,
+}
+fn add_icon(hwnd: HWND, images: HIMAGELIST, icon: Icon, color: COLORREF) -> Result<()> {
+    // Supersampled vector strokes avoid dependence on private-use font glyphs.
     let side = px(hwnd, 16);
-    // SAFETY: every GDI selection is restored; pixels remain valid until bitmap deletion.
+    let scale = 4;
+    let render_side = side * scale;
+    // SAFETY: both DIBs/DCs are owned locally; selections are restored before deletion.
     unsafe {
         let dc = CreateCompatibleDC(None);
         if dc.is_invalid() {
             return Err(Error::from_thread());
         }
-        let info = BITMAPINFO {
+        let mut info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: side,
-                biHeight: -side,
+                biWidth: render_side,
+                biHeight: -render_side,
                 biPlanes: 1,
                 biBitCount: 32,
                 biCompression: BI_RGB.0,
@@ -131,68 +141,130 @@ fn add_glyph(hwnd: HWND, images: HIMAGELIST, glyph: char, color: COLORREF) -> Re
         };
         let mut bits = std::ptr::null_mut();
         let bitmap = match CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut bits, None, 0) {
-            Ok(bitmap) => bitmap,
-            Err(error) => {
+            Ok(b) => b,
+            Err(e) => {
                 let _ = DeleteDC(dc);
-                return Err(error);
+                return Err(e);
             }
         };
-        let font = CreateFontW(
-            -side,
-            0,
-            0,
-            0,
-            FW_NORMAL.0 as i32,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY,
-            DEFAULT_PITCH.0 as u32,
-            w!("Segoe Fluent Icons"),
-        );
-        if font.is_invalid() {
+        let old_bitmap = SelectObject(dc, bitmap.into());
+        std::slice::from_raw_parts_mut(bits.cast::<u32>(), (render_side * render_side) as usize)
+            .fill(0x00ffffff);
+        let pen = CreatePen(PS_SOLID, ((render_side + 6) / 12).max(1), COLORREF(0));
+        if pen.is_invalid() {
+            SelectObject(dc, old_bitmap);
             let _ = DeleteObject(bitmap.into());
             let _ = DeleteDC(dc);
             return Err(Error::from_thread());
         }
-        let old_bitmap = SelectObject(dc, bitmap.into());
-        let old_font = SelectObject(dc, font.into());
-        std::slice::from_raw_parts_mut(bits.cast::<u32>(), (side * side) as usize).fill(0x00FFFFFF);
-        SetBkMode(dc, TRANSPARENT);
-        SetTextColor(dc, COLORREF(0));
-        let mut bounds = windows::Win32::Foundation::RECT {
-            right: side,
-            bottom: side,
-            ..Default::default()
+        let old_pen = SelectObject(dc, pen.into());
+        let old_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+        let p = |v: i32| (v * render_side + 12) / 24;
+        let stroke = |points: &[(i32, i32)]| {
+            let points: Vec<windows::Win32::Foundation::POINT> = points
+                .iter()
+                .map(|&(x, y)| windows::Win32::Foundation::POINT { x: p(x), y: p(y) })
+                .collect();
+            let _ = Polyline(dc, &points);
         };
-        DrawTextW(
-            dc,
-            &mut [glyph as u16],
-            &mut bounds,
-            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-        );
-        let _ = GdiFlush();
-        let color = color.0;
-        for pixel in std::slice::from_raw_parts_mut(bits.cast::<u32>(), (side * side) as usize) {
-            let alpha = 255 - (*pixel & 255);
-            let r = (color & 255) * alpha / 255;
-            let g = ((color >> 8) & 255) * alpha / 255;
-            let b = ((color >> 16) & 255) * alpha / 255;
-            *pixel = (alpha << 24) | (r << 16) | (g << 8) | b;
+        match icon {
+            Icon::Back => {
+                stroke(&[(14, 5), (7, 12), (14, 19)]);
+                stroke(&[(7, 12), (21, 12)]);
+            }
+            Icon::Forward => {
+                stroke(&[(10, 5), (17, 12), (10, 19)]);
+                stroke(&[(3, 12), (17, 12)]);
+            }
+            Icon::Workspace => {
+                let _ = RoundRect(dc, p(3), p(4), p(21), p(20), p(4), p(4));
+                stroke(&[(9, 4), (9, 20)]);
+            }
+            Icon::Settings => {
+                let points: Vec<_> = (0..=32)
+                    .map(|i| {
+                        let angle = (i as f64 - 0.5) * std::f64::consts::TAU / 32.0;
+                        let radius = if i % 4 == 1 || i % 4 == 2 { 10.0 } else { 8.0 };
+                        windows::Win32::Foundation::POINT {
+                            x: ((12.0 + radius * angle.cos()) * render_side as f64 / 24.0).round()
+                                as i32,
+                            y: ((12.0 + radius * angle.sin()) * render_side as f64 / 24.0).round()
+                                as i32,
+                        }
+                    })
+                    .collect();
+                let _ = Polyline(dc, &points);
+                let _ = Ellipse(dc, p(9), p(9), p(15), p(15));
+            }
         }
-        SelectObject(dc, old_font);
+        let _ = GdiFlush();
+        SelectObject(dc, old_brush);
+        SelectObject(dc, old_pen);
         SelectObject(dc, old_bitmap);
-        let index = ImageList_Add(images, bitmap, None);
-        let _ = DeleteObject(font.into());
+        let _ = DeleteObject(pen.into());
+        info.bmiHeader.biWidth = side;
+        info.bmiHeader.biHeight = -side;
+        let mut output_bits = std::ptr::null_mut();
+        let output = CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut output_bits, None, 0);
+        let result = match output {
+            Ok(output) => {
+                let input = std::slice::from_raw_parts(
+                    bits.cast::<u32>(),
+                    (render_side * render_side) as usize,
+                );
+                let pixels = std::slice::from_raw_parts_mut(
+                    output_bits.cast::<u32>(),
+                    (side * side) as usize,
+                );
+                for y in 0..side {
+                    for x in 0..side {
+                        let mut alpha = 0;
+                        for sy in 0..scale {
+                            for sx in 0..scale {
+                                alpha += 255
+                                    - (input[((y * scale + sy) * render_side + x * scale + sx)
+                                        as usize]
+                                        & 255);
+                            }
+                        }
+                        let alpha = alpha / (scale * scale) as u32;
+                        let r = (color.0 & 255) * alpha / 255;
+                        let g = ((color.0 >> 8) & 255) * alpha / 255;
+                        let b = ((color.0 >> 16) & 255) * alpha / 255;
+                        pixels[(y * side + x) as usize] = (alpha << 24) | (r << 16) | (g << 8) | b;
+                    }
+                }
+                let index = ImageList_Add(images, output, None);
+                let _ = DeleteObject(output.into());
+                if index < 0 {
+                    Err(Error::from_thread())
+                } else {
+                    Ok(())
+                }
+            }
+            Err(error) => Err(error),
+        };
         let _ = DeleteObject(bitmap.into());
         let _ = DeleteDC(dc);
-        if index < 0 {
-            Err(Error::from_thread())
-        } else {
-            Ok(())
+        result
+    }
+}
+/// Buffered-paint initialization is paired on the owning STA after all paint buffers finish.
+pub(super) struct PaintRuntime;
+impl PaintRuntime {
+    pub(super) fn new() -> Result<Self> {
+        // SAFETY: called once on the UI thread; Drop balances the successful initialization.
+        unsafe {
+            BufferedPaintInit()?;
+        }
+        Ok(Self)
+    }
+}
+impl Drop for PaintRuntime {
+    fn drop(&mut self) {
+        // SAFETY: all temporary buffers have ended and this is the initializing UI thread.
+        unsafe {
+            let _ = BufferedPaintUnInit();
         }
     }
 }

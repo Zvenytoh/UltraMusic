@@ -301,3 +301,35 @@ musicale ; les menus/dialogues Windows gardent leur présentation système. Aucu
 API sombre non documentée n'est chargée. Les limites de vérification statique
 restent celles de la revue : aucun rendu ou comportement à l'exécution n'est
 certifié sans ouverture du lecteur, qui n'a pas été autorisée pour cette tâche.
+
+## Version 0.5.1 : correction du rendu vérifiée à l'écran
+
+La vérification manuelle a été autorisée par l'utilisateur le 22 octobre 2026.
+Les restrictions de validation statique des sections précédentes décrivent leur
+périmètre historique, pas celui de cette correction.
+
+Le titre DWM attend des pixels prémultipliés. `theme::opaque` utilise un tampon
+natif et force son alpha opaque après dessin GDI ; la zone exacte des boutons
+DWM est ensuite effacée en noir transparent pour laisser Windows les dessiner.
+PaintRuntime initialise/désinitialise le dessin tamponné sur le même STA.
+
+La barre mesure sa largeur à partir de TB_GETRECT après l'ajustement natif, plutôt
+que de supposer que Windows a retenu les largeurs demandées. Son fond entier est
+repeint et le sélecteur est un bouton à icône sans flèche supplémentaire. Les
+quatre icônes utilisent des traits vectoriels suréchantillonnés, sans glyphes
+privés de police. Les DIB et objets GDI temporaires restent possédés localement.
+
+La rangée passe à 44 pixels logiques, avec quatre cibles uniformes de 40 × 32
+pixels. Le mode liste/mixte est supprimé : TB_SETMAXTEXTROWS masque les textes
+sans perdre les noms accessibles et TB_SETBUTTONWIDTH fixe les limites natives.
+Le centre vertical suit les boutons DWM, en compensant la bordure masquée de la
+fenêtre maximisée. Le dessin et le hit-test partagent ces mêmes limites.
+
+Le curseur de volume dessine le canal et le pouce lors de chaque pré-dessin,
+en utilisant leurs rectangles natifs. Il ne dépend plus de notifications de
+sous-parties qui pouvaient manquer après un changement de thème. Le comportement
+d'entrée reste celui du TRACKBAR. Les choix de thème gardent leurs rôles natifs
+radio et utilisent une présentation segmentée. Les titres sont plus discrets,
+avec un lissage explicite et une disposition qui tient dans la taille initiale.
+
+Le périmètre réellement vérifié est décrit dans [UI-VERIFICATION-2026-10-22.md](UI-VERIFICATION-2026-10-22.md).

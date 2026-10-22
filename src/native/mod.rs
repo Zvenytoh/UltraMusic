@@ -140,6 +140,7 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             .ok()
             .map_err(|e| e.to_string())?;
         let _com = Com;
+        let _paint = ui::PaintRuntime::new().map_err(|e| e.to_string())?;
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let instance = HINSTANCE(GetModuleHandleW(None).map_err(|e| e.to_string())?.0);
         // The named resource is emitted by build.rs. LoadIconW returns a shared icon

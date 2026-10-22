@@ -27,39 +27,63 @@ impl App {
             let id = header.idFrom;
             let draw = &*(lp.0 as *const NMCUSTOMDRAW);
             if id == SLIDER {
-                if draw.dwDrawStage == CDDS_PREPAINT {
-                    let mut bounds = RECT::default();
-                    let _ = GetClientRect(header.hwndFrom, &mut bounds);
-                    fill(draw.hdc, &bounds, colors.background);
-                    return Some(LRESULT(CDRF_NOTIFYITEMDRAW as isize));
+                if draw.dwDrawStage != CDDS_PREPAINT {
+                    return None;
                 }
-                if draw.dwDrawStage == CDDS_ITEMPREPAINT {
-                    let mut r = draw.rc;
-                    if draw.dwItemSpec == TBCD_CHANNEL as usize {
-                        let middle = (r.top + r.bottom) / 2;
-                        r.top = middle - px(header.hwndFrom, 1);
-                        r.bottom = middle + px(header.hwndFrom, 1);
-                        rounded(
-                            draw.hdc,
-                            r,
-                            colors.border,
-                            colors.border,
-                            px(header.hwndFrom, 3),
-                        );
-                        return Some(LRESULT(CDRF_SKIPDEFAULT as isize));
-                    }
-                    if draw.dwItemSpec == TBCD_THUMB as usize {
-                        rounded(
-                            draw.hdc,
-                            r,
-                            colors.text,
-                            colors.text,
-                            px(header.hwndFrom, 8),
-                        );
-                        return Some(LRESULT(CDRF_SKIPDEFAULT as isize));
-                    }
+                let mut bounds = RECT::default();
+                let _ = GetClientRect(header.hwndFrom, &mut bounds);
+                fill(draw.hdc, &bounds, colors.background);
+                let mut track = RECT::default();
+                let mut thumb = RECT::default();
+                SendMessageW(
+                    header.hwndFrom,
+                    TBM_GETCHANNELRECT,
+                    None,
+                    Some(windows::Win32::Foundation::LPARAM(
+                        (&mut track as *mut RECT) as isize,
+                    )),
+                );
+                SendMessageW(
+                    header.hwndFrom,
+                    TBM_GETTHUMBRECT,
+                    None,
+                    Some(windows::Win32::Foundation::LPARAM(
+                        (&mut thumb as *mut RECT) as isize,
+                    )),
+                );
+                let middle = (thumb.top + thumb.bottom) / 2;
+                track.top = middle - px(header.hwndFrom, 1);
+                track.bottom = middle + px(header.hwndFrom, 1);
+                rounded(
+                    draw.hdc,
+                    track,
+                    colors.border,
+                    colors.border,
+                    px(header.hwndFrom, 3),
+                );
+                let mut filled = track;
+                filled.right =
+                    ((thumb.left + thumb.right) / 2).clamp(track.left, track.right.max(track.left));
+                if filled.right > filled.left {
+                    rounded(
+                        draw.hdc,
+                        filled,
+                        colors.secondary,
+                        colors.secondary,
+                        px(header.hwndFrom, 3),
+                    );
                 }
-                return None;
+                rounded(
+                    draw.hdc,
+                    thumb,
+                    colors.text,
+                    colors.text,
+                    px(header.hwndFrom, 8),
+                );
+                if windows::Win32::UI::Input::KeyboardAndMouse::GetFocus() == header.hwndFrom {
+                    let _ = DrawFocusRect(draw.hdc, &bounds);
+                }
+                return Some(LRESULT(CDRF_SKIPDEFAULT as isize));
             }
             if !matches!(
                 id,
@@ -85,7 +109,26 @@ impl App {
             let font = SendMessageW(hwnd, WM_GETFONT, None, None);
             let old = SelectObject(draw.hdc, HGDIOBJ(font.0 as *mut _));
             let mut text_bounds = bounds;
-            if id == UPDATE {
+            let radio = matches!(id, THEME_DARK | THEME_LIGHT | THEME_SYSTEM);
+            if radio {
+                rounded(
+                    draw.hdc,
+                    bounds,
+                    if checked || hot {
+                        colors.hover
+                    } else {
+                        colors.background
+                    },
+                    if checked {
+                        colors.border
+                    } else {
+                        colors.background
+                    },
+                    px(hwnd, 10),
+                );
+                text_bounds.left += px(hwnd, 8);
+                text_bounds.right -= px(hwnd, 8);
+            } else if id == UPDATE {
                 rounded(
                     draw.hdc,
                     bounds,
@@ -104,7 +147,6 @@ impl App {
                     right: 1 + side,
                     bottom: top + side,
                 };
-                let radio = matches!(id, THEME_DARK | THEME_LIGHT | THEME_SYSTEM);
                 rounded(
                     draw.hdc,
                     marker,
@@ -116,33 +158,18 @@ impl App {
                         colors.background
                     },
                     if checked { foreground } else { colors.border },
-                    px(hwnd, if radio { 16 } else { 4 }),
+                    px(hwnd, 4),
                 );
                 if checked {
                     let mut center = marker;
-                    if radio {
-                        let inset = px(hwnd, 5);
-                        center.left += inset;
-                        center.right -= inset;
-                        center.top += inset;
-                        center.bottom -= inset;
-                        rounded(
-                            draw.hdc,
-                            center,
-                            colors.background,
-                            colors.background,
-                            px(hwnd, 8),
-                        );
-                    } else {
-                        SetBkMode(draw.hdc, TRANSPARENT);
-                        SetTextColor(draw.hdc, colors.background);
-                        DrawTextW(
-                            draw.hdc,
-                            &mut ['✓' as u16],
-                            &mut center,
-                            DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-                        );
-                    }
+                    SetBkMode(draw.hdc, TRANSPARENT);
+                    SetTextColor(draw.hdc, colors.background);
+                    DrawTextW(
+                        draw.hdc,
+                        &mut ['✓' as u16],
+                        &mut center,
+                        DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
+                    );
                 }
                 text_bounds.left += px(hwnd, 28);
             }
@@ -165,7 +192,13 @@ impl App {
                 draw.hdc,
                 &mut label,
                 &mut text_bounds,
-                DT_WORDBREAK | DT_NOPREFIX | if id == UPDATE { DT_CENTER } else { DT_LEFT },
+                DT_WORDBREAK
+                    | DT_NOPREFIX
+                    | if id == UPDATE || radio {
+                        DT_CENTER
+                    } else {
+                        DT_LEFT
+                    },
             );
             SelectObject(draw.hdc, old);
             if draw.uItemState & CDIS_FOCUS != NMCUSTOMDRAW_DRAW_STATE_FLAGS(0) {
@@ -185,11 +218,23 @@ impl App {
             return LRESULT(CDRF_DODEFAULT as isize);
         }
         if draw.nmcd.dwDrawStage == CDDS_PREPAINT {
+            super::theme::opaque(draw.nmcd.hdc, &draw.nmcd.rc, |dc| {
+                fill(dc, &draw.nmcd.rc, colors.background)
+            });
             return LRESULT(CDRF_NOTIFYITEMDRAW as isize);
         }
         if draw.nmcd.dwDrawStage != CDDS_ITEMPREPAINT {
             return LRESULT(CDRF_DODEFAULT as isize);
         }
+        let mut item = *draw;
+        super::theme::opaque(draw.nmcd.hdc, &draw.nmcd.rc, |dc| {
+            item.nmcd.hdc = dc;
+            let _ = self.paint_toolbar_item(&item);
+        });
+        LRESULT(CDRF_SKIPDEFAULT as isize)
+    }
+    fn paint_toolbar_item(&self, draw: &NMTBCUSTOMDRAW) -> LRESULT {
+        let colors = self.colors();
         let id = draw.nmcd.dwItemSpec;
         let index = match id {
             BACK => 0,
@@ -217,7 +262,7 @@ impl App {
                     images,
                     index,
                     dc,
-                    r.left + px(self.hwnd, 6),
+                    r.left + (r.right - r.left - side) / 2,
                     r.top + (r.bottom - r.top - side) / 2,
                     side,
                     side,
@@ -228,18 +273,6 @@ impl App {
                     } else {
                         ILD_TRANSPARENT
                     },
-                );
-            }
-            if id == super::chrome::PICKER {
-                let mut arrow = r;
-                arrow.left = arrow.right - px(self.hwnd, 12);
-                SetBkMode(dc, TRANSPARENT);
-                SetTextColor(dc, colors.secondary);
-                DrawTextW(
-                    dc,
-                    &mut ['▾' as u16],
-                    &mut arrow,
-                    DT_CENTER | DT_VCENTER | DT_SINGLELINE,
                 );
             }
             if draw.nmcd.uItemState & CDIS_FOCUS != NMCUSTOMDRAW_DRAW_STATE_FLAGS(0) {

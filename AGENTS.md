@@ -9,3 +9,5 @@
 - Never claim runtime, audio, DRM, or performance validation unless it was performed.
 - Use the project Graphify skill for architecture and relationship questions when a graph exists; keep generated graph output local.
 - Do not use subagents unless the user asks for them.
+
+- The user authorized targeted manual UI verification on 2026-10-22: open UltraMusic and check rendering/interactions for UI fixes. Do not infer visual correctness from formatting, lint or build success. Unit tests remain opt-in.

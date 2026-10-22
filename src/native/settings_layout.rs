@@ -100,7 +100,7 @@ impl App {
                         bottom: y + header_height,
                     },
                 ));
-                y += header_height + px(hwnd, 16);
+                y += header_height + px(hwnd, 12);
                 if group == 56 {
                     let min_width = items
                         .iter()
@@ -122,7 +122,7 @@ impl App {
                         1
                     };
                     let width = (inner - (columns - 1) * gap) / columns;
-                    let height = line + gap;
+                    let height = (line + gap).max(px(hwnd, 32));
                     for (index, &id) in items.iter().enumerate() {
                         let column = index as i32 % columns;
                         let row = index as i32 / columns;
@@ -139,7 +139,7 @@ impl App {
                         ));
                     }
                     y += ((items.len() as i32 + columns - 1) / columns) * (height + gap)
-                        + px(hwnd, 24);
+                        + px(hwnd, 16);
                     continue;
                 }
                 for &id in items {
@@ -178,7 +178,7 @@ impl App {
                     }
                     y += height + gap;
                 }
-                y += px(hwnd, 24);
+                y += px(hwnd, 16);
             }
             SelectObject(dc, old);
             ReleaseDC(Some(hwnd), dc);

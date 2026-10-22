@@ -69,13 +69,14 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
-          - A single compact navigation/title row inspired by the approved Codex reference.
-          - Back, Forward, workspace and Settings icons, without persistent menu labels.
-          - Native Windows caption buttons, resizing and draggable empty title space.
-          - Dark appearance by default, with remembered Dark / Light / System choices.
-          - Shared charcoal/light palettes, explicit Segoe typography and DPI-aware controls.
-          - Adaptive settings layout and system high-contrast fallback.
-          - Existing update integrity checks, service sessions and audio controls are retained.
+          - Opaque title/toolbar painting fixes the gray overlay and white trailing strip.
+          - Native caption buttons remain visible and keep their Windows behavior.
+          - Clean vector Back, Forward, workspace and Settings icons replace font glyphs.
+          - A 44 px header and evenly spaced controls align with Windows caption icons, including when maximized.
+          - Quieter Segoe typography and a segmented appearance selector.
+          - Settings fit their normal opening size without an unnecessary vertical scrollbar.
+          - The volume slider remains visible after switching between dark and light themes.
+          - Targeted visual/manual checks now supplement formatting, lint and compilation.
 
           The appearance setting affects UltraMusic's host; music providers keep their own page themes.
 
