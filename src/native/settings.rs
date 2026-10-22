@@ -17,114 +17,53 @@ use windows::{
 const CLASS: windows::core::PCWSTR = w!("UltraMusic.Settings.1");
 // TBM_GETPOS is WM_USER + 0; windows metadata does not export this alias.
 const TBM_GETPOS: u32 = WM_USER;
-const SLIDER: usize = 40;
-const PERCENT: usize = 41;
-const STATUS: usize = 42;
-const VERSION: usize = 43;
-// Logical coordinates; native labels wrap within their measured font's layout area.
-type ControlSpec = (usize, &'static str, &'static str, i32, i32, i32, i32, u32);
-const ROWS: [ControlSpec; 13] = [
-    (50, "BUTTON", "Audio", 16, 16, 424, 180, BS_GROUPBOX as u32),
-    (51, "STATIC", "Volume de l’application", 32, 40, 280, 24, 0),
-    (
-        SLIDER,
-        "msctls_trackbar32",
-        "Volume",
-        24,
-        68,
-        336,
-        28,
-        TBS_NOTICKS,
-    ),
-    (PERCENT, "STATIC", "100 %", 368, 72, 64, 24, 0),
+pub(super) const SLIDER: usize = 40;
+pub(super) const PERCENT: usize = 41;
+pub(super) const STATUS: usize = 42;
+pub(super) const VERSION: usize = 43;
+// Native children; geometry is measured and owned by settings_layout.rs.
+const ROWS: [(usize, &str, &str, u32); 13] = [
+    (50, "STATIC", "Audio", 0),
+    (51, "STATIC", "Volume de l’application", 0),
+    (SLIDER, "msctls_trackbar32", "Volume", TBS_NOTICKS),
+    (PERCENT, "STATIC", "100 %", 0),
     (
         MUTE,
         "BUTTON",
         "Couper le son",
-        32,
-        104,
-        392,
-        24,
-        BS_CHECKBOX as u32,
+        (BS_CHECKBOX | BS_MULTILINE) as u32,
     ),
     (
         COMPAT,
         "BUTTON",
         "Conserver le rendu en arrière-plan",
-        32,
-        136,
-        392,
-        24,
-        BS_CHECKBOX as u32,
+        (BS_CHECKBOX | BS_MULTILINE) as u32,
     ),
     (
         52,
         "STATIC",
         "Garde le rendu actif lorsque le lecteur est masqué.",
-        32,
-        164,
-        392,
-        24,
         0,
     ),
-    (
-        53,
-        "BUTTON",
-        "Protection YouTube",
-        16,
-        212,
-        424,
-        128,
-        BS_GROUPBOX as u32,
-    ),
+    (53, "STATIC", "Protection YouTube", 0),
     (
         BLOCKER,
         "BUTTON",
         "Bloquer les publicités YouTube",
-        32,
-        240,
-        392,
-        24,
-        BS_CHECKBOX as u32,
+        (BS_CHECKBOX | BS_MULTILINE) as u32,
     ),
-    (
-        STATUS,
-        "STATIC",
-        "Initialisation du module…",
-        32,
-        272,
-        392,
-        24,
-        0,
-    ),
+    (STATUS, "STATIC", "Initialisation du module…", 0),
     (
         54,
         "STATIC",
         "Modifier cette option recharge la page et interrompt la lecture.",
-        32,
-        302,
-        392,
-        32,
         0,
     ),
-    (
-        55,
-        "BUTTON",
-        "Application",
-        16,
-        356,
-        424,
-        100,
-        BS_GROUPBOX as u32,
-    ),
+    (55, "STATIC", "Application", 0),
     (
         VERSION,
         "STATIC",
         concat!("UltraMusic ", env!("CARGO_PKG_VERSION")),
-        32,
-        380,
-        392,
-        24,
         0,
     ),
 ];
@@ -150,14 +89,15 @@ impl App {
                 lpfnWndProc: Some(settings_proc),
                 hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
                 hIcon: self.icon,
-                hbrBackground: GetSysColorBrush(COLOR_BTNFACE),
+                hbrBackground: GetSysColorBrush(COLOR_WINDOW),
                 ..Default::default()
             };
             RegisterClassW(&class);
-            let style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
+            let style =
+                WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN | WS_THICKFRAME | WS_VSCROLL;
             let mut bounds = RECT {
-                right: px(self.hwnd, 456),
-                bottom: px(self.hwnd, 472),
+                right: px(self.hwnd, 500),
+                bottom: px(self.hwnd, 560),
                 ..Default::default()
             };
             let _ = AdjustWindowRectExForDpi(
@@ -171,15 +111,23 @@ impl App {
             let _ = GetWindowRect(self.hwnd, &mut parent);
             let width = bounds.right - bounds.left;
             let height = bounds.bottom - bounds.top;
+            let mut placement = RECT {
+                left: parent.left + (parent.right - parent.left - width) / 2,
+                top: parent.top + (parent.bottom - parent.top - height) / 2,
+                ..Default::default()
+            };
+            placement.right = placement.left + width;
+            placement.bottom = placement.top + height;
+            super::settings_layout::fit_to_work_area(&mut placement);
             let result = CreateWindowExW(
                 WS_EX_CONTROLPARENT,
                 CLASS,
                 w!("Paramètres — UltraMusic"),
                 style,
-                parent.left + (parent.right - parent.left - width) / 2,
-                parent.top + (parent.bottom - parent.top - height) / 2,
-                width,
-                height,
+                placement.left,
+                placement.top,
+                placement.right - placement.left,
+                placement.bottom - placement.top,
                 Some(self.hwnd),
                 None,
                 instance,
@@ -190,6 +138,8 @@ impl App {
                 return;
             };
             self.settings.set(hwnd);
+            self.settings_scroll.set(0);
+            self.settings_wheel.set(0);
             if self.create_settings_controls(hwnd).is_err() {
                 let _ = DestroyWindow(hwnd);
                 super::show_error("Impossible de créer les paramètres.");
@@ -210,7 +160,7 @@ impl App {
                 dwICC: ICC_BAR_CLASSES,
             })
             .ok()?;
-            for (id, class, label, _, _, _, _, style) in ROWS {
+            for (id, class, label, style) in ROWS {
                 let tab = if matches!(id, SLIDER | MUTE | COMPAT | BLOCKER) {
                     WS_TABSTOP
                 } else {
@@ -235,7 +185,7 @@ impl App {
                 Default::default(),
                 w!("BUTTON"),
                 w!("Vérifier les mises à jour"),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(BS_MULTILINE as u32),
                 0,
                 0,
                 0,
@@ -250,42 +200,34 @@ impl App {
             send(slider, TBM_SETRANGEMAX, 0, 100);
             send(slider, TBM_SETPAGESIZE, 0, 10);
         }
-        self.layout_settings(hwnd)
+        self.refresh_settings_font(hwnd)
     }
-    fn layout_settings(&self, hwnd: HWND) -> Result<()> {
-        let font = ui::Font::new(hwnd)?;
+    fn refresh_settings_font(&self, hwnd: HWND) -> Result<()> {
+        let font = ui::Font::settings(hwnd, false)?;
+        let heading = ui::Font::settings(hwnd, true)?;
         // SAFETY: only known controls are updated; the new font is installed before dropping the old one.
         unsafe {
-            for (id, _, _, x, y, width, height, _) in ROWS {
+            for (id, _, _, _) in ROWS {
                 if let Ok(child) = GetDlgItem(Some(hwnd), id as i32) {
-                    ui::apply_font(child, font.0);
-                    let _ = SetWindowPos(
+                    ui::apply_font(
                         child,
-                        None,
-                        px(hwnd, x),
-                        px(hwnd, y),
-                        px(hwnd, width),
-                        px(hwnd, height),
-                        SWP_NOZORDER | SWP_NOACTIVATE,
+                        if matches!(id, 50 | 53 | 55) {
+                            heading.0
+                        } else {
+                            font.0
+                        },
                     );
                 }
             }
             if let Ok(child) = GetDlgItem(Some(hwnd), UPDATE as i32) {
                 ui::apply_font(child, font.0);
-                let _ = SetWindowPos(
-                    child,
-                    None,
-                    px(hwnd, 32),
-                    px(hwnd, 412),
-                    px(hwnd, 392),
-                    px(hwnd, 28),
-                    SWP_NOZORDER | SWP_NOACTIVATE,
-                );
             }
         }
         let old = self.settings_font.replace(Some(font));
+        let old_heading = self.settings_heading_font.replace(Some(heading));
         drop(old);
-        self.refresh_settings();
+        drop(old_heading);
+        self.layout_settings(hwnd);
         Ok(())
     }
     pub(super) fn refresh_settings(&self) {
@@ -317,21 +259,36 @@ impl App {
             if let Ok(slider) = GetDlgItem(Some(hwnd), SLIDER as i32) {
                 send(slider, TBM_SETPOS, 1, percent as isize);
             }
+            let mut changed_layout = false;
             for (id, label) in [
                 (PERCENT, format!("{percent} %")),
                 (STATUS, self.blocker_status().to_string()),
-                (
-                    UPDATE,
-                    if self.update_busy.get() {
-                        "Afficher le résultat de la vérification…".to_string()
-                    } else {
-                        "Vérifier les mises à jour".to_string()
-                    },
-                ),
+                (UPDATE, self.update_label().to_string()),
             ] {
                 if let Ok(child) = GetDlgItem(Some(hwnd), id as i32) {
-                    let _ = SetWindowTextW(child, &HSTRING::from(label));
+                    if super::settings_layout::control_text(child) != label {
+                        let _ = SetWindowTextW(child, &HSTRING::from(label));
+                        changed_layout |= id == STATUS || id == UPDATE;
+                    }
                 }
+            }
+            if let Ok(button) = GetDlgItem(Some(hwnd), COMPAT as i32) {
+                let _ = windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow(
+                    button,
+                    self.update_phase.get() != super::updates::Phase::Preparing,
+                );
+            }
+            if let Ok(button) = GetDlgItem(Some(hwnd), UPDATE as i32) {
+                let _ = windows::Win32::UI::Input::KeyboardAndMouse::EnableWindow(
+                    button,
+                    !matches!(
+                        self.update_phase.get(),
+                        super::updates::Phase::Downloading | super::updates::Phase::Preparing
+                    ),
+                );
+            }
+            if changed_layout {
+                self.layout_settings(hwnd);
             }
             let _ = RedrawWindow(Some(hwnd), None, None, RDW_INVALIDATE | RDW_ALLCHILDREN);
         }
@@ -352,41 +309,94 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
                     app.command(id);
                 }
             }
+            WM_SIZE => app.layout_settings(hwnd),
+            WM_VSCROLL => app.settings_vscroll(wp),
+            WM_MOUSEWHEEL => {
+                let delta = ((wp.0 >> 16) as u16 as i16) as i32 + app.settings_wheel.get();
+                app.settings_wheel.set(delta % 120);
+                app.scroll_settings(app.settings_scroll.get() - (delta / 120) * px(hwnd, 48));
+                return LRESULT(0);
+            }
+            WM_GETMINMAXINFO => {
+                let info = &mut *(lp.0 as *mut MINMAXINFO);
+                let mut work = RECT {
+                    left: 0,
+                    top: 0,
+                    right: px(hwnd, 320),
+                    bottom: px(hwnd, 160),
+                };
+                let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                let mut bounds = MONITORINFO {
+                    cbSize: size_of::<MONITORINFO>() as u32,
+                    ..Default::default()
+                };
+                if GetMonitorInfoW(monitor, &mut bounds).as_bool() {
+                    info.ptMaxTrackSize.x = bounds.rcWork.right - bounds.rcWork.left;
+                    info.ptMaxTrackSize.y = bounds.rcWork.bottom - bounds.rcWork.top;
+                    work.right = work.right.min(bounds.rcWork.right - bounds.rcWork.left);
+                    work.bottom = work.bottom.min(bounds.rcWork.bottom - bounds.rcWork.top);
+                }
+                info.ptMinTrackSize.x = work.right;
+                info.ptMinTrackSize.y = work.bottom;
+                return LRESULT(0);
+            }
             WM_HSCROLL => {
                 if let Ok(slider) = GetDlgItem(Some(hwnd), SLIDER as i32) {
                     if lp.0 == slider.0 as isize {
-                        app.set_volume(send(slider, TBM_GETPOS, 0, 0).0 as f32 / 100.0);
-                        app.refresh_ui();
+                        app.begin_volume_gesture();
+                        app.set_live_volume(send(slider, TBM_GETPOS, 0, 0).0 as f32 / 100.0);
+                        if wp.0 & 0xffff == TB_ENDTRACK as usize {
+                            app.finish_volume_gesture();
+                        }
+                        app.refresh_settings();
                     }
                 }
             }
             WM_CTLCOLORSTATIC | WM_CTLCOLORBTN => {
                 let dc = HDC(wp.0 as *mut _);
+                let id = GetDlgCtrlID(HWND(lp.0 as *mut _));
+                let enabled = windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled(HWND(
+                    lp.0 as *mut _,
+                ))
+                .as_bool();
                 SetTextColor(
                     dc,
-                    windows::Win32::Foundation::COLORREF(GetSysColor(COLOR_BTNTEXT)),
+                    windows::Win32::Foundation::COLORREF(GetSysColor(
+                        if !enabled || matches!(id, 52 | 54 | 43) {
+                            COLOR_GRAYTEXT
+                        } else {
+                            COLOR_WINDOWTEXT
+                        },
+                    )),
                 );
                 SetBkColor(
                     dc,
-                    windows::Win32::Foundation::COLORREF(GetSysColor(COLOR_BTNFACE)),
+                    windows::Win32::Foundation::COLORREF(GetSysColor(COLOR_WINDOW)),
                 );
-                return LRESULT(GetSysColorBrush(COLOR_BTNFACE).0 as isize);
+                SetBkMode(dc, TRANSPARENT);
+                return LRESULT(GetSysColorBrush(COLOR_WINDOW).0 as isize);
             }
             WM_CLOSE => {
                 let _ = DestroyWindow(hwnd);
             }
             WM_DESTROY => {
+                app.finish_volume_gesture();
+                app.settings_positions.borrow_mut().clear();
                 if app.settings.get() == hwnd {
                     app.settings.set(HWND::default());
                 }
             }
             WM_NCDESTROY => {
                 let old = app.settings_font.replace(None);
+                let old_heading = app.settings_heading_font.replace(None);
                 drop(old);
+                drop(old_heading);
                 return DefWindowProcW(hwnd, msg, wp, lp);
             }
             WM_DPICHANGED => {
-                let r = &*(lp.0 as *const RECT);
+                let mut rect = *(lp.0 as *const RECT);
+                super::settings_layout::fit_to_work_area(&mut rect);
+                let r = &rect;
                 let _ = SetWindowPos(
                     hwnd,
                     None,
@@ -396,10 +406,10 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
                     r.bottom - r.top,
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
-                let _ = app.layout_settings(hwnd);
+                let _ = app.refresh_settings_font(hwnd);
             }
             WM_THEMECHANGED | WM_SETTINGCHANGE => {
-                let _ = app.layout_settings(hwnd);
+                let _ = app.refresh_settings_font(hwnd);
                 return DefWindowProcW(hwnd, msg, wp, lp);
             }
             _ => return DefWindowProcW(hwnd, msg, wp, lp),

@@ -1,6 +1,7 @@
 //! Release discovery and verified downloads, independent of the music WebView.
 mod http;
 pub(crate) mod install;
+mod retention;
 
 use semver::Version;
 use serde::Deserialize;
@@ -25,6 +26,7 @@ pub(crate) struct Release {
 pub(crate) struct Download {
     pub(crate) path: PathBuf,
     pub(crate) digest: String,
+    lease: retention::Lease,
 }
 #[derive(Deserialize)]
 struct PublishedRelease {
@@ -102,11 +104,12 @@ fn valid_digest(digest: &str) -> bool {
 
 pub(crate) fn download(release: Release) -> Result<Download, String> {
     let root = std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA indisponible.")?;
-    let directory = PathBuf::from(root)
-        .join("UltraMusic")
-        .join("Updates")
-        .join(unique_id()?);
+    let directory = PathBuf::from(root).join("UltraMusic").join("Updates");
+    fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+    let _ = retention::prune(&directory);
+    let directory = directory.join(unique_id()?);
     fs::create_dir_all(&directory).map_err(|_| "Impossible de préparer le téléchargement.")?;
+    let lease = retention::Lease::create(&directory).map_err(|e| e.to_string())?;
     let path = directory.join("UltraMusic-Setup.exe");
     let result = (|| {
         let response = http::get(&release.url)?;
@@ -139,16 +142,22 @@ pub(crate) fn download(release: Release) -> Result<Download, String> {
             );
         }
         verify_executable(&path)?;
-        Ok(Download {
-            path: path.clone(),
-            digest,
-        })
+        Ok(digest)
     })();
-    if result.is_err() {
-        let _ = fs::remove_file(&path);
-        let _ = fs::remove_dir(&directory);
+    match result {
+        Ok(digest) => Ok(Download {
+            path,
+            digest,
+            lease,
+        }),
+        Err(error) => {
+            drop(lease);
+            let _ = fs::remove_file(&path);
+            let _ = fs::remove_file(directory.join(".lease"));
+            let _ = fs::remove_dir(&directory);
+            Err(error)
+        }
     }
-    result
 }
 
 pub(super) fn unique_id() -> Result<String, String> {

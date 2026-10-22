@@ -4,9 +4,9 @@
   <p><strong>Your music. A native Windows home.</strong></p>
   <p>Apple Music, YouTube Music and YouTube in one focused desktop player.</p>
   <p>
-    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.2/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.3/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
   </p>
-  <p>Windows 11 · x64 · Version 0.4.2</p>
+  <p>Windows 11 · x64 · Version 0.4.3</p>
   <p>
     <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
@@ -42,7 +42,8 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 - **Switch your workspace** — choose Apple Music, YouTube Music or YouTube from
   the toolbar; one player stays active and your selection is remembered.
 - **Settings at hand** — use the Settings icon for application volume, mute,
-  background rendering compatibility, installed version and updates.
+  background rendering compatibility, installed version and updates, in a
+  resizable window with readable sections, wrapping labels and scrolling.
 - **Background listening** — close or minimize the window to keep the player
   available in the notification area.
 - **Controls within reach** — play/pause, application volume and mute from the
@@ -58,7 +59,7 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Installation
 
-1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.2/UltraMusic-Setup.exe)**.
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.3/UltraMusic-Setup.exe)**.
 2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
 3. Open **UltraMusic** from the Start menu.
 
@@ -69,7 +70,7 @@ runtime using Microsoft's bootstrapper. An Internet connection is required.
 Remove the application through **Windows Settings → Apps → Installed apps**.
 Your music service session data is kept separately from the program files.
 
-[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.4.2)
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.4.3)
 
 ## Everyday controls
 
@@ -98,6 +99,8 @@ in the notification area for background audio and tray controls to work.
 Playback commands depend on the media elements exposed by the provider's page;
 mute and volume use WebView2 and Windows audio interfaces respectively.
 Your volume and mute preferences are remembered between launches.
+Volume changes are saved when you finish adjusting the slider. If a preference
+cannot be saved, UltraMusic reports it and keeps the current setting in memory.
 
 ## Choose your service
 
@@ -153,12 +156,16 @@ check manually from **Settings** or the tray menu.
 
 Downloads are restricted to the official repository and GitHub's delivery hosts.
 The installer size and SHA-256 digest are verified before it runs. After you
-confirm, UltraMusic downloads the update, closes the player, runs setup and
+confirm, UltraMusic downloads the update and prepares a verified installer and
+backup before closing the player. If preparation fails, the player stays open.
+After preparation, it runs setup and
 restarts with the selected service and compatibility option. Playback is
 interrupted during installation; the service profile is preserved.
 
 There is no recurring background update timer. Temporary update files and the
 previous executable are stored under `%LOCALAPPDATA%\UltraMusic\Updates`.
+Before another download, older recognized inactive operations are cleaned up;
+the two newest previous operations and active or unknown files are retained.
 
 ## Background behavior
 

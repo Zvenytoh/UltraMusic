@@ -55,6 +55,11 @@ impl App {
         unsafe {
             let Ok(menu) = CreatePopupMenu() else { return };
             let _ = AppendMenuW(menu, MF_STRING, OPEN, w!("Ouvrir UltraMusic"));
+            let preparing = if self.update_phase.get() == super::updates::Phase::Preparing {
+                MF_GRAYED
+            } else {
+                MF_ENABLED
+            };
             for (command, service) in SERVICES {
                 let label = windows::core::HSTRING::from(service.label());
                 let selected = if self.service.get() == service {
@@ -62,7 +67,7 @@ impl App {
                 } else {
                     MF_UNCHECKED
                 };
-                let _ = AppendMenuW(menu, MF_STRING | selected, command, &label);
+                let _ = AppendMenuW(menu, MF_STRING | selected | preparing, command, &label);
             }
             let _ = AppendMenuW(menu, MF_STRING, SETTINGS, w!("Paramètres…"));
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
@@ -82,12 +87,16 @@ impl App {
             let _ = AppendMenuW(menu, MF_STRING, VOLUME_UP, w!("Volume +10 %"));
             let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
             let _ = AppendMenuW(menu, MF_STRING, RESTART, w!("Redémarrer le lecteur…"));
-            let update_label = if self.update_busy.get() {
-                w!("Afficher le résultat de la vérification…")
+            let update_label = windows::core::HSTRING::from(self.update_label());
+            let downloading = if matches!(
+                self.update_phase.get(),
+                super::updates::Phase::Downloading | super::updates::Phase::Preparing
+            ) {
+                MF_GRAYED
             } else {
-                w!("Vérifier les mises à jour…")
+                MF_ENABLED
             };
-            let _ = AppendMenuW(menu, MF_STRING, UPDATE, update_label);
+            let _ = AppendMenuW(menu, MF_STRING | downloading, UPDATE, &update_label);
             let flag = if self.keep_rendering.get() {
                 MF_CHECKED
             } else {
@@ -95,7 +104,7 @@ impl App {
             };
             let _ = AppendMenuW(
                 menu,
-                MF_STRING | flag,
+                MF_STRING | flag | preparing,
                 COMPAT,
                 w!("Compatibilité : conserver le rendu"),
             );

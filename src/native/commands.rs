@@ -23,6 +23,13 @@ pub(super) const SERVICES: [(usize, Service); 3] = [
 
 impl App {
     pub(super) fn command(&self, command: usize) {
+        // The helper has captured restart options; native controls are disabled for this short phase.
+        if self.update_phase.get() == super::updates::Phase::Preparing
+            && (command == COMPAT || SERVICES.iter().any(|(id, _)| *id == command))
+        {
+            return;
+        }
+
         if let Some((_, service)) = SERVICES.iter().find(|(id, _)| *id == command) {
             self.select_service(*service);
             return;

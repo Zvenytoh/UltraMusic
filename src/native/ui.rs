@@ -23,6 +23,12 @@ pub(super) fn px(hwnd: HWND, value: i32) -> i32 {
 pub(super) struct Font(pub HFONT);
 impl Font {
     pub(super) fn new(hwnd: HWND) -> Result<Self> {
+        Self::styled(hwnd, 0, false)
+    }
+    pub(super) fn settings(hwnd: HWND, heading: bool) -> Result<Self> {
+        Self::styled(hwnd, if heading { 18 } else { 14 }, heading)
+    }
+    fn styled(hwnd: HWND, minimum: i32, heading: bool) -> Result<Self> {
         // SAFETY: Windows fills a correctly sized structure for this window's DPI.
         unsafe {
             let mut metrics = NONCLIENTMETRICSW {
@@ -36,6 +42,13 @@ impl Font {
                 0,
                 GetDpiForWindow(hwnd).max(96),
             )?;
+            if minimum > 0 {
+                metrics.lfMessageFont.lfHeight =
+                    -metrics.lfMessageFont.lfHeight.abs().max(px(hwnd, minimum));
+            }
+            if heading {
+                metrics.lfMessageFont.lfWeight = FW_SEMIBOLD.0 as i32;
+            }
             let font = CreateFontIndirectW(&metrics.lfMessageFont);
             if font.is_invalid() {
                 return Err(Error::from_thread());
@@ -157,7 +170,7 @@ fn add_glyph(hwnd: HWND, images: HIMAGELIST, glyph: char) -> Result<()> {
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
         );
         let _ = GdiFlush();
-        let color = GetSysColor(COLOR_BTNTEXT);
+        let color = GetSysColor(COLOR_WINDOWTEXT);
         for pixel in std::slice::from_raw_parts_mut(bits.cast::<u32>(), (side * side) as usize) {
             let alpha = 255 - (*pixel & 255);
             let r = (color & 255) * alpha / 255;

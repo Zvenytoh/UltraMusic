@@ -198,6 +198,19 @@ impl App {
         self.blocker_busy.set(false);
         self.blocker_state.set(state);
         self.refresh_ui();
+        if matches!(state, State::Unavailable) && !self.wants_blocking() {
+            // Never load a page after an unconfirmed disable of a profile-persistent extension.
+            // SAFETY: defer controller shutdown/dialogs until after this COM callback returns.
+            unsafe {
+                let _ = windows::Win32::UI::WindowsAndMessaging::PostMessageW(
+                    Some(self.hwnd),
+                    super::BLOCKER_FAILED,
+                    windows::Win32::Foundation::WPARAM(self.generation.get()),
+                    windows::Win32::Foundation::LPARAM(0),
+                );
+            }
+            return;
+        }
         if let Some(controller) = self.controller() {
             // SAFETY: completion runs on the current UI STA, without retained borrows.
             let result = unsafe {

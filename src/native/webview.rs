@@ -49,6 +49,7 @@ impl App {
     pub(super) fn close_webview(&self) {
         self.generation.set(self.generation.get().wrapping_add(1));
         self.external.borrow_mut().take();
+        self.reset_volume_sessions();
         self.blocker_busy.set(false);
         self.blocker_state.set(super::blocker::State::Loading);
         let extension = self.blocker.borrow_mut().take();
@@ -306,6 +307,7 @@ impl App {
                 );
                 if sent.is_err() {
                     self.external.borrow_mut().take();
+                    self.reset_volume_sessions();
                 }
             }
         }

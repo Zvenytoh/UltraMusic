@@ -50,13 +50,13 @@ impl Preferences {
         })();
         value.unwrap_or_default()
     }
-    fn save(&self) {
-        if let (Some(path), Ok(bytes)) = (Self::path(), serde_json::to_vec(self)) {
-            let temporary = path.with_extension("tmp");
-            if std::fs::write(&temporary, bytes).is_ok() {
-                let _ = std::fs::rename(temporary, path);
-            }
-        }
+    fn save(&self) -> std::io::Result<()> {
+        let path =
+            Self::path().ok_or_else(|| std::io::Error::other("LOCALAPPDATA indisponible"))?;
+        let bytes = serde_json::to_vec(self)?;
+        let temporary = path.with_extension("tmp");
+        std::fs::write(&temporary, bytes)?;
+        std::fs::rename(temporary, path)
     }
 }
 use windows::{
@@ -93,6 +93,7 @@ impl App {
                         audio.IsDocumentPlayingAudio(&mut playing)?;
                         // Stopping playback does not require enumerating Windows audio sessions.
                         if playing.as_bool() {
+                            app.reset_volume_sessions();
                             let _ = app.apply_volume();
                         }
                     }
@@ -159,24 +160,84 @@ impl App {
         };
         if result.is_ok() {
             self.muted.set(!self.muted.get());
-            self.save_audio_preferences();
+            self.audio_dirty.set(true);
+            self.commit_audio_preferences();
         } else {
             self.media_error();
         }
     }
 
     pub(super) fn set_volume(&self, value: f32) {
-        self.volume.set(value.clamp(0.0, 1.0));
-        self.save_audio_preferences();
+        self.set_live_volume(value);
+        self.finish_volume_gesture();
+    }
+
+    pub(super) fn begin_volume_gesture(&self) {
+        if !self.volume_gesture.replace(true) {
+            self.reset_volume_sessions();
+            self.volume_failed.set(false);
+        }
+    }
+
+    pub(super) fn set_live_volume(&self, value: f32) {
+        let value = value.clamp(0.0, 1.0);
+        if self.volume.get() == value {
+            return;
+        }
+        self.volume.set(value);
+        self.audio_dirty.set(true);
         if self.apply_volume().is_err() {
+            self.volume_failed.set(true);
+        }
+    }
+
+    pub(super) fn finish_volume_gesture(&self) {
+        self.volume_gesture.set(false);
+        self.reset_volume_sessions();
+        self.commit_audio_preferences();
+        if self.volume_failed.replace(false) {
             self.media_error();
         }
     }
 
+    pub(super) fn reset_volume_sessions(&self) {
+        self.volume_sessions_valid.set(false);
+        let previous = self.volume_sessions.replace(Vec::new());
+        drop(previous);
+    }
+
     pub(super) fn apply_volume(&self) -> Result<()> {
+        // Retry discovery once if a cached audio session becomes invalid during the gesture.
+        for attempt in 0..2 {
+            let sessions = if self.volume_gesture.get() && self.volume_sessions_valid.get() {
+                self.volume_sessions.borrow().clone()
+            } else {
+                let sessions = self.find_volume_sessions()?;
+                if self.volume_gesture.get() {
+                    let previous = self.volume_sessions.replace(sessions.clone());
+                    drop(previous);
+                    self.volume_sessions_valid.set(true);
+                }
+                sessions
+            };
+            // SAFETY: cloned session interfaces stay on the UI STA; no borrow spans COM calls.
+            let result = sessions.iter().try_for_each(|session| unsafe {
+                session.SetMasterVolume(self.volume.get(), std::ptr::null())
+            });
+            match result {
+                Ok(()) => return Ok(()),
+                Err(_) if attempt == 0 && self.volume_gesture.get() => self.reset_volume_sessions(),
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    }
+
+    fn find_volume_sessions(&self) -> Result<Vec<ISimpleAudioVolume>> {
         let Some(controller) = self.controller() else {
-            return Ok(());
+            return Ok(Vec::new());
         };
+        let mut matching = Vec::new();
         // SAFETY: COM is initialized on this thread. Each interface is released
         // locally; only sessions belonging to this WebView2 process tree are changed.
         unsafe {
@@ -196,20 +257,29 @@ impl App {
                     let control: IAudioSessionControl2 = session.cast()?;
                     if processes.contains(&control.GetProcessId()?) {
                         let volume: ISimpleAudioVolume = session.cast()?;
-                        volume.SetMasterVolume(self.volume.get(), std::ptr::null())?;
+                        matching.push(volume);
                     }
                 }
             }
         }
-        Ok(())
+        Ok(matching)
     }
 
-    fn save_audio_preferences(&self) {
-        Preferences {
+    fn commit_audio_preferences(&self) {
+        if !self.audio_dirty.get() {
+            return;
+        }
+        let result = Preferences {
             volume: self.volume.get(),
             muted: self.muted.get(),
         }
         .save();
+        match result {
+            Ok(()) => self.audio_dirty.set(false),
+            Err(error) => {
+                dialog(Some(self.hwnd), &format!("Le réglage audio actuel est appliqué, mais n’a pas pu être mémorisé.\n\n{error}"), MB_OK | MB_ICONERROR);
+            }
+        }
     }
 
     pub(super) fn media_error(&self) {

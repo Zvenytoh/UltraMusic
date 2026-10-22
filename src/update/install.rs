@@ -2,17 +2,45 @@
 use super::{verify, Download};
 use std::{
     ffi::{OsStr, OsString},
-    fs,
-    os::windows::process::CommandExt,
+    fs::{self, OpenOptions},
+    os::windows::{
+        fs::OpenOptionsExt,
+        io::{AsRawHandle, FromRawHandle, OwnedHandle},
+        process::CommandExt,
+    },
     path::{Component, Path, PathBuf, Prefix},
-    process::Command,
+    process::{Child, Command},
 };
 use windows::Win32::{
-    Foundation::{CloseHandle, WAIT_OBJECT_0},
-    System::Threading::{OpenProcess, WaitForSingleObject, CREATE_NO_WINDOW, PROCESS_SYNCHRONIZE},
+    Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0},
+    System::Threading::{
+        CreateEventW, OpenEventW, OpenProcess, SetEvent, WaitForMultipleObjects,
+        WaitForSingleObject, CREATE_NO_WINDOW, EVENT_MODIFY_STATE, PROCESS_SYNCHRONIZE,
+        SYNCHRONIZATION_SYNCHRONIZE,
+    },
 };
 
-pub(crate) fn launch(download: Download, arguments: &[&str]) -> Result<(), String> {
+pub(crate) struct Prepared {
+    proceed: OwnedHandle,
+    _child: Child,
+    _lease: super::retention::Lease,
+}
+impl Prepared {
+    pub(crate) fn launch(self) -> Result<(), String> {
+        // SAFETY: the helper opened this event before acknowledging readiness.
+        unsafe { SetEvent(HANDLE(self.proceed.as_raw_handle())).map_err(|e| e.to_string()) }
+    }
+}
+fn event(name: &str) -> Result<OwnedHandle, String> {
+    // SAFETY: transfer the newly created kernel handle exactly once into an OwnedHandle.
+    unsafe {
+        CreateEventW(None, true, false, &windows::core::HSTRING::from(name))
+            .map(|h| OwnedHandle::from_raw_handle(h.0))
+            .map_err(|e| e.to_string())
+    }
+}
+/// Runs on the update worker; the UI remains available until helper readiness is confirmed.
+pub(crate) fn prepare(download: Download, arguments: &[String]) -> Result<Prepared, String> {
     let target = std::env::current_exe()
         .and_then(fs::canonicalize)
         .map_err(|e| e.to_string())?;
@@ -33,17 +61,39 @@ pub(crate) fn launch(download: Download, arguments: &[&str]) -> Result<(), Strin
             .join("WebView2Loader.dll");
         fs::copy(loader, directory.join("WebView2Loader.dll")).map_err(|e| e.to_string())?;
     }
-    Command::new(helper)
+    let id = super::unique_id()?;
+    let ready_name = format!("Local\\UltraMusic.UpdateReady.{id}");
+    let proceed_name = format!("Local\\UltraMusic.UpdateProceed.{id}");
+    let ready = event(&ready_name)?;
+    let proceed = event(&proceed_name)?;
+    let child = Command::new(helper)
         .arg("--apply-update")
         .arg(std::process::id().to_string())
         .arg(target)
-        .arg(download.path)
-        .arg(download.digest)
+        .arg(&download.path)
+        .arg(&download.digest)
+        .arg(ready_name)
+        .arg(proceed_name)
         .args(arguments)
         .creation_flags(CREATE_NO_WINDOW.0)
         .spawn()
         .map_err(|e| e.to_string())?;
-    Ok(())
+    // SAFETY: both handles stay owned throughout this bounded worker-only wait.
+    let result = unsafe {
+        WaitForMultipleObjects(
+            &[HANDLE(ready.as_raw_handle()), HANDLE(child.as_raw_handle())],
+            false,
+            30_000,
+        )
+    };
+    if result != WAIT_OBJECT_0 {
+        return Err("La préparation de l’installation n’a pas abouti. Le lecteur reste ouvert ; réessayez après avoir vérifié l’espace disque.".into());
+    }
+    Ok(Prepared {
+        proceed,
+        _child: child,
+        _lease: download.lease,
+    })
 }
 
 /// Runs before COM and the named instance mutex are initialized.
@@ -56,7 +106,7 @@ pub(crate) fn run_helper() -> Option<Result<(), String>> {
 }
 
 fn apply(args: Vec<OsString>) -> Result<(), String> {
-    if args.len() < 4 {
+    if args.len() < 6 {
         return Err("Arguments de mise à jour incomplets.".into());
     }
     let parent: u32 = args[0]
@@ -84,7 +134,14 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
         return Err("Chemins de mise à jour invalides.".into());
     }
     let digest = args[3].to_str().ok_or("Empreinte invalide.")?;
-    let restart = &args[4..];
+    let ready_name = args[4].to_str().ok_or("Événement invalide.")?;
+    let proceed_name = args[5].to_str().ok_or("Événement invalide.")?;
+    if !ready_name.starts_with(&format!("Local\\UltraMusic.UpdateReady.{parent}-"))
+        || !proceed_name.starts_with(&format!("Local\\UltraMusic.UpdateProceed.{parent}-"))
+    {
+        return Err("Événements de préparation invalides.".into());
+    }
+    let restart = &args[6..];
     if restart.iter().any(|arg| {
         !matches!(
             arg.to_str(),
@@ -93,8 +150,15 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
     }) {
         return Err("Options de redémarrage invalides.".into());
     }
+    let _lease = super::retention::Lease::open(source.parent().ok_or("Dossier absent.")?)
+        .map_err(|e| e.to_string())?;
+    // Pin the verified installer against modification/deletion until Setup exits.
+    let verified_source = OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(&source)
+        .map_err(|e| e.to_string())?;
     verify(&source, digest)?;
-    wait_for_parent(parent)?;
     let directory = target.parent().ok_or("Dossier de destination invalide.")?;
     let backup = source
         .parent()
@@ -111,6 +175,33 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
     let log = installer_path(&log)?;
     let mut log_argument = OsString::from("/LOG=");
     log_argument.push(&log);
+    // All fallible preparation, including the backup, completed while the old player was alive.
+    // SAFETY: event handles are transferred once and retained for the entire handshake.
+    unsafe {
+        let ready = OwnedHandle::from_raw_handle(
+            OpenEventW(
+                EVENT_MODIFY_STATE,
+                false,
+                &windows::core::HSTRING::from(ready_name),
+            )
+            .map_err(|e| e.to_string())?
+            .0,
+        );
+        let proceed = OwnedHandle::from_raw_handle(
+            OpenEventW(
+                SYNCHRONIZATION_SYNCHRONIZE,
+                false,
+                &windows::core::HSTRING::from(proceed_name),
+            )
+            .map_err(|e| e.to_string())?
+            .0,
+        );
+        SetEvent(HANDLE(ready.as_raw_handle())).map_err(|e| e.to_string())?;
+        if WaitForSingleObject(HANDLE(proceed.as_raw_handle()), 30_000) != WAIT_OBJECT_0 {
+            return Err("Installation annulée : confirmation du lecteur absente.".into());
+        }
+    }
+    wait_for_parent(parent)?;
     let result = Command::new(&source)
         // Keep Setup's progress and error dialogs visible; suppressing them made
         // installation failures indistinguishable from a silent rollback.
@@ -151,6 +242,7 @@ fn apply(args: Vec<OsString>) -> Result<(), String> {
         let _ = Command::new(&target).args(restart).spawn();
         return Err("Le redémarrage a échoué. L’ancien lecteur a été restauré.".into());
     }
+    drop(verified_source);
     let _ = fs::remove_file(source);
     Ok(())
 }

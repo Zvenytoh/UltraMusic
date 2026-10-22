@@ -13,6 +13,8 @@ pub(super) const PICKER: usize = 20;
 pub(super) const HEIGHT: i32 = 44;
 const FLEX: usize = 30;
 const GAP: usize = 31;
+// TB_SETBKCOLOR is the toolbar alias for this common-controls message.
+const TB_SETBKCOLOR: u32 = CCM_SETBKCOLOR;
 fn send(hwnd: HWND, msg: u32, wp: usize, lp: isize) -> LRESULT {
     // SAFETY: callers supply scalar messages or synchronous borrowed structures.
     unsafe { SendMessageW(hwnd, msg, Some(WPARAM(wp)), Some(LPARAM(lp))) }
@@ -51,6 +53,12 @@ impl App {
                 None,
             )?;
             self.toolbar.set(toolbar);
+            send(
+                toolbar,
+                TB_SETBKCOLOR,
+                0,
+                GetSysColor(COLOR_WINDOW) as isize,
+            );
             send(toolbar, TB_BUTTONSTRUCTSIZE, size_of::<TBBUTTON>(), 0);
             send(
                 toolbar,
@@ -101,6 +109,15 @@ impl App {
     pub(super) fn refresh_chrome_resources(&self) -> Result<()> {
         let resources = ui::Resources::new(self.hwnd)?;
         let toolbar = self.toolbar.get();
+        // SAFETY: this owned toolbar receives a scalar system-color message on the UI thread.
+        unsafe {
+            send(
+                toolbar,
+                TB_SETBKCOLOR,
+                0,
+                GetSysColor(COLOR_WINDOW) as isize,
+            );
+        }
         ui::apply_font(toolbar, resources.font.0);
         send(toolbar, TB_SETIMAGELIST, 0, resources.images.0);
         let image_size = px(self.hwnd, 16) as u32;
@@ -150,7 +167,8 @@ impl App {
                 SelectObject(dc, old);
                 ReleaseDC(Some(toolbar), dc);
             }
-            let provider = extent.cx + px(self.hwnd, 40);
+            let provider = (extent.cx + px(self.hwnd, 40))
+                .min((bounds.right - px(self.hwnd, 96)).max(px(self.hwnd, 64)));
             self.toolbar_width(BACK, px(self.hwnd, 32));
             self.toolbar_width(SETTINGS, px(self.hwnd, 32));
             self.toolbar_width(PICKER, provider);
@@ -187,6 +205,12 @@ impl App {
             ..Default::default()
         };
         if !self.toolbar.get().is_invalid() {
+            send(
+                self.toolbar.get(),
+                TB_ENABLEBUTTON,
+                PICKER,
+                isize::from(self.update_phase.get() != super::updates::Phase::Preparing),
+            );
             send(
                 self.toolbar.get(),
                 TB_SETBUTTONINFOW,
@@ -236,7 +260,11 @@ impl App {
                     let _ = DestroyWindow(root);
                     return true;
                 }
-                return IsDialogMessageW(root, message).as_bool();
+                let handled = IsDialogMessageW(root, message).as_bool();
+                if handled && message.message == WM_KEYDOWN {
+                    self.ensure_settings_focus();
+                }
+                return handled;
             }
             if root != self.hwnd {
                 return false;
@@ -333,13 +361,25 @@ impl App {
                         self.service_menu();
                         return Some(LRESULT(0));
                     }
+                    if header.hwndFrom == self.toolbar.get() && header.code == NM_CUSTOMDRAW {
+                        let draw = &*(lp.0 as *const NMTBCUSTOMDRAW);
+                        if draw.nmcd.dwDrawStage == CDDS_PREPAINT {
+                            return Some(LRESULT(CDRF_NOTIFYITEMDRAW as isize));
+                        }
+                        if draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT
+                            && matches!(draw.nmcd.dwItemSpec, FLEX | GAP)
+                        {
+                            // These native separator items provide spacing, not visible rules.
+                            return Some(LRESULT(CDRF_SKIPDEFAULT as isize));
+                        }
+                    }
                     None
                 }
                 WM_GETMINMAXINFO => {
                     let info = &mut *(lp.0 as *mut MINMAXINFO);
                     info.ptMinTrackSize = POINT {
-                        x: px(self.hwnd, 500),
-                        y: px(self.hwnd, 440),
+                        x: px(self.hwnd, 360),
+                        y: px(self.hwnd, 300),
                     };
                     Some(LRESULT(0))
                 }
@@ -349,7 +389,7 @@ impl App {
                     let mut r = RECT::default();
                     let _ = GetClientRect(self.hwnd, &mut r);
                     r.bottom = px(self.hwnd, HEIGHT).min(r.bottom);
-                    FillRect(dc, &r, GetSysColorBrush(COLOR_BTNFACE));
+                    FillRect(dc, &r, GetSysColorBrush(COLOR_WINDOW));
                     let _ = EndPaint(self.hwnd, &paint);
                     Some(LRESULT(0))
                 }

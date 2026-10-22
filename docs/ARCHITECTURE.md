@@ -12,6 +12,7 @@ src/
     ├── chrome.rs        Barre native, cadre DWM, sélection de service et clavier
     ├── ui.rs            Polices système, DPI et icônes alpha avec propriétaires RAII
     ├── settings.rs      Fenêtre de paramètres native appartenant au lecteur
+    ├── settings_layout.rs Géométrie mesurée, défilement et visibilité du focus
     ├── commands.rs      Actions partagées par la barre, les paramètres et le menu
     ├── webview.rs       Initialisation asynchrone, contrôleur et callbacks
     ├── window.rs        Messages Win32, taille, visibilité et dialogues différés
@@ -191,7 +192,7 @@ Le module est activé uniquement sur YouTube et YouTube Music, selon une préfé
 `blocker.txt` lue avec une limite de 16 octets. Apple Music demande sa désactivation
 avant navigation. Les activations sont sérialisées et relisent le choix utilisateur
 avant la navigation : des clics rapides ne laissent pas appliquer un ancien réglage.
-Tous les callbacks vérifient la génération du lecteur. Un échec d'initialisation
+Tous les callbacks vérifient la génération du lecteur. Un échec d'activation
 affiche « indisponible » et laisse le lecteur naviguer ; l'état « activé » vérifie
 seulement IsEnabled, sans prétendre prouver la suppression des publicités.
 
@@ -229,3 +230,38 @@ noir forcé. Les ressources sont recréées au changement de DPI/thème ; les
 polices ne sont libérées qu’après remplacement ou destruction de leurs contrôles.
 Une fenêtre déjà maximisée est montrée avec SW_SHOW, réservant SW_RESTORE à
 la restauration d'une fenêtre minimisée.
+
+## Version 0.4.3 : corrections de revue et paramètres adaptatifs
+
+Une désactivation requise du bloqueur qui échoue interdit la navigation : un
+message différé lié à la génération ferme le contrôleur et explique la reprise.
+Les sessions et le profil restent conservés.
+
+`settings_layout.rs` mesure les libellés avec les polices du moniteur, adapte
+les hauteurs et possède un seul défilement vertical. La fenêtre reste dans la
+zone de travail ; le focus clavier est ramené dans la vue. Les titres remplacent
+les cadres de groupe. Les fonds utilisent COLOR_WINDOW ; les couleurs système
+et polices sont renouvelées au changement de thème/DPI. Le thème reste celui
+des contrôles Win32, sans migration WinUI 3 ni mode sombre forcé.
+
+Le curseur audio ignore les valeurs inchangées, conserve les sessions WASAPI
+pendant un geste et écrit les préférences en fin de geste. Une erreur de session
+permet une nouvelle découverte bornée ; une erreur de sauvegarde est signalée
+sans effacer le choix en mémoire.
+
+Les phases de mise à jour distinguent vérification, téléchargement et préparation.
+Le worker attend un accusé du helper pendant au plus 30 secondes. Le helper
+conserve un handle empêchant la modification/suppression du Setup vérifié et
+prépare la sauvegarde avant son accusé. Un second événement autorise ensuite
+l'installation ; le lecteur se ferme seulement après ce signal. Les changements
+de service/rendu sont désactivés pendant cette préparation. L'attente de sortie
+du parent reste bornée, sans polling. Les garanties de restauration restent
+limitées à l'exécutable et à son lancement, pas à un rollback complet de Setup.
+
+`update/retention.rs` nettoie les anciens dossiers reconnus avant un téléchargement,
+en conservant les deux opérations précédentes les plus récentes et toute opération
+active ou inconnue. Des baux ouverts et les règles de partage Windows protègent
+les fichiers utilisés ; les points de réanalyse et contenus inconnus sont exclus.
+La CI refuse un tag qui ne correspond pas exactement à la version Cargo.
+
+Le bilan détaillé reste dans [REVIEW-CORRECTIONS-2026-10-22.md](REVIEW-CORRECTIONS-2026-10-22.md).

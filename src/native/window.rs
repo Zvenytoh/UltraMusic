@@ -1,7 +1,7 @@
 //! Native window transitions and dispatch. Modal UI runs outside COM callbacks.
 use super::{
-    app, dialog, show_error, App, EXTERNAL, FAILED, HEADER_ACTION, MEDIA_FAILED, RESTORE, TRAY,
-    UPDATE_READY,
+    app, dialog, show_error, App, BLOCKER_FAILED, EXTERNAL, FAILED, HEADER_ACTION, MEDIA_FAILED,
+    RESTORE, TRAY, UPDATE_READY,
 };
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC;
 use windows::{
@@ -153,6 +153,16 @@ pub(super) unsafe extern "system" fn window_proc(
                 WM_RBUTTONUP | WM_CONTEXTMENU => a.menu(),
                 _ => {}
             },
+            BLOCKER_FAILED
+                if wp.0 == a.generation.get()
+                    && matches!(a.blocker_state.get(), super::blocker::State::Unavailable) =>
+            {
+                a.close_webview();
+                a.blocker_state.set(super::blocker::State::Unavailable);
+                a.refresh_ui();
+                a.restore();
+                dialog(Some(hwnd), "La désactivation du bloqueur n’a pas pu être confirmée. Le lecteur a été arrêté pour respecter votre choix. Utilisez « Redémarrer le lecteur » dans la zone de notification pour réessayer ; si le problème persiste, réinstallez UltraMusic et mettez WebView2 à jour. Vos sessions sont conservées.", MB_OK | MB_ICONERROR);
+            }
             FAILED if wp.0 == a.generation.get() => {
                 a.restore();
                 dialog(Some(hwnd), "Le lecteur WebView2 n’a pas pu démarrer ou un de ses processus a échoué. Vérifiez le runtime Microsoft Edge WebView2 et la connexion réseau. Utilisez « Redémarrer le lecteur » dans la zone de notification, ou relancez UltraMusic. Aucun redémarrage automatique n’est effectué pendant l’écoute.", MB_OK | MB_ICONERROR);

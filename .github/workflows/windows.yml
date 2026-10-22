@@ -15,6 +15,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy
+      - name: Validate release version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Cargo metadata failed.' }
+          $package = @($metadata.packages | Where-Object name -eq 'ultramusic')
+          if ($package.Count -ne 1 -or $env:GITHUB_REF_NAME -cne "v$($package[0].version)") {
+            throw 'Release tag must exactly match the UltraMusic Cargo package version.'
+          }
       - name: Audit dependencies
         shell: pwsh
         run: ./scripts/audit.ps1
@@ -59,15 +69,14 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
-          - Standard Windows title bar and caption buttons.
-          - Native Back control for the current music service's WebView history.
-          - A compact native toolbar with matching Back and Settings icons.
-          - System UI fonts, common-controls visual styles and DPI-aware icon resources.
-          - Native settings with an accessible volume slider and preference checkboxes.
-          - Back navigation state follows the current WebView history.
-          - Opening settings preserves the maximized window.
-          - Bundled uBO Lite for YouTube and YouTube Music, with a remembered settings switch.
-          - Verified in-app updates, preserved service sessions and the existing tray controls.
+          - Refined Windows toolbar with consistent system icons and unobtrusive spacing.
+          - Resizable settings with clear headings, uniform backgrounds and DPI-aware scrolling.
+          - Volume gestures reuse audio sessions and save preferences when adjustment ends.
+          - Explicit feedback when an audio preference cannot be saved.
+          - Required blocker deactivation failures stop navigation safely.
+          - Update preparation is acknowledged before the player closes.
+          - Separate update phases, bounded file retention and protected active downloads.
+          - Release tags are checked against the application package version.
 
           Requires Windows 11 x64 and an Internet connection. Music service
           accounts, subscriptions and playback availability are managed by each provider.

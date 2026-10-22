@@ -8,6 +8,7 @@ mod instance;
 mod media;
 mod service;
 mod settings;
+mod settings_layout;
 mod tray;
 mod ui;
 mod updates;
@@ -51,6 +52,7 @@ const EXTERNAL: u32 = WM_APP + 4;
 const UPDATE_READY: u32 = WM_APP + 5;
 const MEDIA_FAILED: u32 = WM_APP + 6;
 const HEADER_ACTION: u32 = WM_APP + 7;
+const BLOCKER_FAILED: u32 = WM_APP + 8;
 
 thread_local! { static APP: RefCell<Option<Rc<App>>> = const { RefCell::new(None) }; }
 struct App {
@@ -59,7 +61,12 @@ struct App {
     toolbar: Cell<HWND>,
     ui: RefCell<Option<ui::Resources>>,
     settings_font: RefCell<Option<ui::Font>>,
+    settings_heading_font: RefCell<Option<ui::Font>>,
     settings: Cell<HWND>,
+    settings_scroll: Cell<i32>,
+    settings_content: Cell<i32>,
+    settings_wheel: Cell<i32>,
+    settings_positions: RefCell<Vec<(usize, windows::Win32::Foundation::RECT)>>,
     blocker_enabled: Cell<bool>,
     blocker_busy: Cell<bool>,
     blocker_state: Cell<blocker::State>,
@@ -76,7 +83,12 @@ struct App {
     taskbar_created: u32,
     external: RefCell<Option<String>>,
     failed: Cell<bool>,
-    update_busy: Cell<bool>,
+    update_phase: Cell<updates::Phase>,
+    volume_gesture: Cell<bool>,
+    volume_sessions_valid: Cell<bool>,
+    volume_sessions: RefCell<Vec<windows::Win32::Media::Audio::ISimpleAudioVolume>>,
+    audio_dirty: Cell<bool>,
+    volume_failed: Cell<bool>,
     volume: Cell<f32>,
     muted: Cell<bool>,
     update_manual: Cell<bool>,
@@ -160,7 +172,12 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             toolbar: Cell::new(HWND::default()),
             ui: RefCell::new(None),
             settings_font: RefCell::new(None),
+            settings_heading_font: RefCell::new(None),
             settings: Cell::new(HWND::default()),
+            settings_scroll: Cell::new(0),
+            settings_content: Cell::new(0),
+            settings_wheel: Cell::new(0),
+            settings_positions: RefCell::new(Vec::new()),
             blocker_enabled: Cell::new(blocker::load_preference()),
             blocker_busy: Cell::new(false),
             blocker_state: Cell::new(blocker::State::Loading),
@@ -175,7 +192,12 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             taskbar_created: RegisterWindowMessageW(w!("TaskbarCreated")),
             external: RefCell::new(None),
             failed: Cell::new(false),
-            update_busy: Cell::new(false),
+            update_phase: Cell::new(updates::Phase::Idle),
+            volume_gesture: Cell::new(false),
+            volume_sessions_valid: Cell::new(false),
+            volume_sessions: RefCell::new(Vec::new()),
+            audio_dirty: Cell::new(false),
+            volume_failed: Cell::new(false),
             volume: Cell::new(audio_preferences.volume),
             muted: Cell::new(audio_preferences.muted),
             update_manual: Cell::new(false),
