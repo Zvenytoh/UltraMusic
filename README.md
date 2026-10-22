@@ -4,9 +4,9 @@
   <p><strong>Your music. A native Windows home.</strong></p>
   <p>Apple Music, YouTube Music and YouTube in one focused desktop player.</p>
   <p>
-    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.1/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.2/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
   </p>
-  <p>Windows 11 · x64 · Version 0.4.1</p>
+  <p>Windows 11 · x64 · Version 0.4.2</p>
   <p>
     <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
@@ -38,10 +38,10 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 ## Features
 
 - **Native Windows chrome** — the standard Windows title bar and caption buttons,
-  with matching system-rendered controls for Back, service selection and settings.
+  with a compact, themed toolbar for Back, service selection and settings.
 - **Switch your workspace** — choose Apple Music, YouTube Music or YouTube from
   the toolbar; one player stays active and your selection is remembered.
-- **Settings at hand** — open the gear button for application volume, mute,
+- **Settings at hand** — use the Settings icon for application volume, mute,
   background rendering compatibility, installed version and updates.
 - **Background listening** — close or minimize the window to keep the player
   available in the notification area.
@@ -58,7 +58,7 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Installation
 
-1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.1/UltraMusic-Setup.exe)**.
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.2/UltraMusic-Setup.exe)**.
 2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
 3. Open **UltraMusic** from the Start menu.
 
@@ -69,13 +69,14 @@ runtime using Microsoft's bootstrapper. An Internet connection is required.
 Remove the application through **Windows Settings → Apps → Installed apps**.
 Your music service session data is kept separately from the program files.
 
-[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.4.1)
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.4.2)
 
 ## Everyday controls
 
 Use **← Back** to return to the previous page, the service button to switch
 providers, and **Settings** to open settings. **F6** moves between the player
-and toolbar; **Tab** moves through the native controls, **Space** activates a button, **Ctrl+,** opens settings, and
+and toolbar; **Arrow keys** move between toolbar actions and **Tab** returns to
+the player. **Space** activates an action, **Ctrl+,** opens settings, and
 **Escape** closes settings or returns focus from the toolbar to the player.
 
 Right-click the UltraMusic icon in the Windows notification area for background controls:

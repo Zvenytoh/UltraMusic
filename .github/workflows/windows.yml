@@ -59,9 +59,13 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
-          - Standard Windows title bar and caption buttons, including reliable system handling when maximized.
+          - Standard Windows title bar and caption buttons.
           - Native Back control for the current music service's WebView history.
-          - System-themed toolbar controls for service selection and settings.
+          - A compact native toolbar with matching Back and Settings icons.
+          - System UI fonts, common-controls visual styles and DPI-aware icon resources.
+          - Native settings with an accessible volume slider and preference checkboxes.
+          - Back navigation state follows the current WebView history.
+          - Opening settings preserves the maximized window.
           - Bundled uBO Lite for YouTube and YouTube Music, with a remembered settings switch.
           - Verified in-app updates, preserved service sessions and the existing tray controls.
 

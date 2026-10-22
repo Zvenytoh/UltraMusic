@@ -10,7 +10,7 @@ src/
     ├── mod.rs           État partagé, initialisation STA et boucle GetMessageW
     ├── instance.rs      Garde RAII du mutex et activation de l’instance existante
     ├── chrome.rs        Barre native, cadre DWM, sélection de service et clavier
-    ├── drawing.rs       Dessin GDI et icônes vectorielles avec ressources bornées
+    ├── ui.rs            Polices système, DPI et icônes alpha avec propriétaires RAII
     ├── settings.rs      Fenêtre de paramètres native appartenant au lecteur
     ├── commands.rs      Actions partagées par la barre, les paramètres et le menu
     ├── webview.rs       Initialisation asynchrone, contrôleur et callbacks
@@ -98,7 +98,6 @@ le contrôleur précédent et invalide sa génération avant de recréer le lect
 Le profil, les réglages audio et l'option de rendu sont conservés ; la politique
 de navigation et la relance après mise à jour utilisent le service actif.
 
-`native/theme.rs` applique les attributs DWM à la fenêtre de paramètres.
 `native/media.rs`
 gère les commandes ponctuelles du menu de notification : mute natif WebView2,
 volume WASAPI limité aux sessions du processus navigateur et de ses descendants,
@@ -149,14 +148,14 @@ La désinstallation conserve volontairement les cookies et données de session.
 `native/chrome.rs` conserve le cadre et les boutons de légende fournis par
 `WS_OVERLAPPEDWINDOW` ; Windows gère leur taille, leur thème, le redimensionnement
 et les interactions en fenêtre maximisée. Une barre de commandes Win32 à thème
-système occupe 40 pixels logiques sous le titre. Retour appelle l’historique
-WebView2 du service courant. Le sélecteur et les paramètres utilisent les contrôles
-BUTTON natifs ; le contenu distant commence sous la barre.
+système occupe 44 pixels logiques sous le titre. Retour appelle l’historique
+WebView2 du service courant. Le contrôle TOOLBARCLASSNAMEW gère les icônes,
+le sélecteur et les paramètres ; le contenu distant commence sous la barre.
 
-`native/drawing.rs` dessine les paramètres lors des événements de peinture.
-Les icônes utilisent Segoe Fluent Icons fourni par Windows 11 ; les sélections
-GDI sont restaurées avant de libérer pinceaux, polices et plumes. La barre
-principale, ses boutons et son menu de services utilisent le thème système.
+`native/ui.rs` possède les polices NONCLIENTMETRICS et les icônes alpha
+Segoe Fluent Icons. Les ressources remplacées restent valides jusqu’à leur
+remplacement dans les contrôles. Les paramètres possèdent leur propre police
+pour suivre le DPI de leur moniteur. Le manifeste demande common-controls v6.
 
 `native/settings.rs` possède une seule fenêtre de paramètres, sans nouvelle
 boucle de messages. Elle est détruite à la fermeture ou au masquage du lecteur.
@@ -212,3 +211,21 @@ et fermer vers la notification. Les boutons de Retour, service et paramètres
 sont des contrôles BUTTON rendus par le thème Windows. Retour vérifie
 `CanGoBack` avant d'appeler `GoBack` sur l'interface WebView2 courante ; le
 changement de service crée toujours un nouveau contrôleur et un historique vide.
+
+
+## Version 0.4.2 : contrôles système cohérents
+
+La barre native mesure 44 pixels logiques, avec deux actions de 32 × 32 pixels
+et des glyphes de 16 pixels. Le nom du service est dimensionné avec la police
+système courante ; un séparateur flexible aligne les paramètres à droite.
+F6 donne le focus à la barre, les flèches naviguent entre actions et Tab ou
+Escape revient au lecteur. HistoryChanged actualise Retour avec contrôle de
+la génération et CanGoBack, sans polling.
+
+Les paramètres utilisent des labels STATIC, des cases BUTTON et un TRACKBAR
+0–100 pour le volume. Les actions réutilisent commands.rs ; aucun script de page
+n'est ajouté. Les couleurs et styles suivent les contrôles Windows, sans titre
+noir forcé. Les ressources sont recréées au changement de DPI/thème ; les
+polices ne sont libérées qu’après remplacement ou destruction de leurs contrôles.
+Une fenêtre déjà maximisée est montrée avec SW_SHOW, réservant SW_RESTORE à
+la restauration d'une fenêtre minimisée.
