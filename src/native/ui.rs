@@ -117,17 +117,16 @@ enum Icon {
     Settings,
 }
 fn add_icon(hwnd: HWND, images: HIMAGELIST, icon: Icon, color: COLORREF) -> Result<()> {
-    // Supersampled vector strokes avoid dependence on private-use font glyphs.
+    // Draw on the physical pixel grid: resizing a larger bitmap softens tiny title-bar strokes.
     let side = px(hwnd, 16);
-    let scale = 4;
-    let render_side = side * scale;
-    // SAFETY: both DIBs/DCs are owned locally; selections are restored before deletion.
+    let render_side = side;
+    // SAFETY: the DIB/DC are owned locally; selections are restored before deletion.
     unsafe {
         let dc = CreateCompatibleDC(None);
         if dc.is_invalid() {
             return Err(Error::from_thread());
         }
-        let mut info = BITMAPINFO {
+        let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
                 biWidth: render_side,
@@ -202,47 +201,18 @@ fn add_icon(hwnd: HWND, images: HIMAGELIST, icon: Icon, color: COLORREF) -> Resu
         SelectObject(dc, old_pen);
         SelectObject(dc, old_bitmap);
         let _ = DeleteObject(pen.into());
-        info.bmiHeader.biWidth = side;
-        info.bmiHeader.biHeight = -side;
-        let mut output_bits = std::ptr::null_mut();
-        let output = CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &mut output_bits, None, 0);
-        let result = match output {
-            Ok(output) => {
-                let input = std::slice::from_raw_parts(
-                    bits.cast::<u32>(),
-                    (render_side * render_side) as usize,
-                );
-                let pixels = std::slice::from_raw_parts_mut(
-                    output_bits.cast::<u32>(),
-                    (side * side) as usize,
-                );
-                for y in 0..side {
-                    for x in 0..side {
-                        let mut alpha = 0;
-                        for sy in 0..scale {
-                            for sx in 0..scale {
-                                alpha += 255
-                                    - (input[((y * scale + sy) * render_side + x * scale + sx)
-                                        as usize]
-                                        & 255);
-                            }
-                        }
-                        let alpha = alpha / (scale * scale) as u32;
-                        let r = (color.0 & 255) * alpha / 255;
-                        let g = ((color.0 >> 8) & 255) * alpha / 255;
-                        let b = ((color.0 >> 16) & 255) * alpha / 255;
-                        pixels[(y * side + x) as usize] = (alpha << 24) | (r << 16) | (g << 8) | b;
-                    }
-                }
-                let index = ImageList_Add(images, output, None);
-                let _ = DeleteObject(output.into());
-                if index < 0 {
-                    Err(Error::from_thread())
-                } else {
-                    Ok(())
-                }
-            }
-            Err(error) => Err(error),
+        for pixel in std::slice::from_raw_parts_mut(bits.cast::<u32>(), (side * side) as usize) {
+            let alpha = 255 - (*pixel & 255);
+            let r = (color.0 & 255) * alpha / 255;
+            let g = ((color.0 >> 8) & 255) * alpha / 255;
+            let b = ((color.0 >> 16) & 255) * alpha / 255;
+            *pixel = (alpha << 24) | (r << 16) | (g << 8) | b;
+        }
+        let index = ImageList_Add(images, bitmap, None);
+        let result = if index < 0 {
+            Err(Error::from_thread())
+        } else {
+            Ok(())
         };
         let _ = DeleteObject(bitmap.into());
         let _ = DeleteDC(dc);

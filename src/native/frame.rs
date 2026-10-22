@@ -77,7 +77,8 @@ impl App {
         unsafe {
             let mut result = LRESULT(0);
             // DWM must see non-client messages first, including WM_NCMOUSELEAVE.
-            if DwmDefWindowProc(self.hwnd, msg, wp, lp, &mut result).as_bool() {
+            let handled = DwmDefWindowProc(self.hwnd, msg, wp, lp, &mut result).as_bool();
+            if handled && msg != WM_NCHITTEST {
                 return Some(result);
             }
             match msg {
@@ -101,6 +102,23 @@ impl App {
                     };
                     let mut client = point;
                     let _ = ScreenToClient(self.hwnd, &mut client);
+                    // Interactive children take priority over the draggable extended title area.
+                    let toolbar = self.toolbar.get();
+                    let mut buttons = RECT::default();
+                    if !toolbar.is_invalid()
+                        && IsWindowVisible(toolbar).as_bool()
+                        && GetWindowRect(toolbar, &mut buttons).is_ok()
+                        && point.x >= buttons.left
+                        && point.x < buttons.right
+                        && point.y >= buttons.top
+                        && point.y < buttons.bottom
+                        && (IsZoomed(self.hwnd).as_bool() || client.y >= px(self.hwnd, 6))
+                    {
+                        return Some(LRESULT(HTCLIENT as isize));
+                    }
+                    if handled {
+                        return Some(result);
+                    }
                     let default = DefWindowProcW(self.hwnd, msg, wp, lp);
                     if default.0 != HTCLIENT as isize && default.0 != HTCAPTION as isize {
                         return Some(default);

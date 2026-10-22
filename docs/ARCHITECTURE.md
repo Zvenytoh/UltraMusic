@@ -346,3 +346,22 @@ de deux pixels dans les boutons afin de rester visible au bord du client.
 La consigne finale interdit de reprendre le contrôle du bureau. La compilation
 et les contrôles statiques ne constituent donc pas une validation visuelle
 complète de cette version. Voir [UI-REFINEMENT-0.5.2.md](UI-REFINEMENT-0.5.2.md).
+
+## Version 0.5.3 : routage des clics sur la barre
+
+Le hit-test de la rangée n'excluait pas explicitement le HWND de la barre d'outils
+avant de renvoyer HTCAPTION. WM_NCHITTEST consulte désormais son rectangle écran
+et renvoie HTCLIENT sur les contrôles, même si DWM a proposé un résultat pour
+la rangée étendue. Les autres résultats DWM restent prioritaires ; la bordure
+haute de redimensionnement est conservée hors maximisation. Le menu natif et
+les boutons système conservent leur traitement existant.
+
+Les icônes sont dessinées directement dans leur DIB à la taille physique du DPI
+courant. La seconde DIB et la moyenne des pixels du dessin quatre fois plus grand
+sont supprimées : les traits ne sont plus adoucis par cette réduction.
+
+Ces changements répondent au signalement utilisateur après 0.5.2. Les anciennes
+revues ne prouvent pas la correction des clics. Seuls le formatage, Clippy et
+la compilation/production de l'installateur sont contrôlés pour 0.5.3 ; aucun
+contrôle du bureau ni test unitaire/fonctionnel n'est exécuté. Les clics et le
+rendu final à l'exécution restent à confirmer.

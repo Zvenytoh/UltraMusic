@@ -69,14 +69,13 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
-          - A standard 32 logical pixel title row removes the unused space below the native Windows caption buttons.
-          - Wide 40 px navigation targets are retained, with lighter, consistent icon strokes.
-          - The Settings icon has a simpler, more open silhouette.
-          - Keyboard focus is inset inside each toolbar button to avoid clipping at the window edge.
-          - Native Windows caption controls, provider navigation and stored preferences are preserved.
+          - Toolbar controls are explicitly excluded from the draggable title region, including when maximized.
+          - Native Windows caption-button handling and the restored window's top resize edge are retained.
+          - Icons are drawn directly at their physical display size, without downsampling a larger bitmap.
+          - Provider navigation, saved preferences and user profiles are preserved.
 
           This refinement was checked statically and built by Windows CI. Final maximized,
-          DPI and installer behavior were not rechecked interactively at the user's request.
+          clicks, DPI and installer behavior were not rechecked interactively at the user's request.
 
           The appearance setting affects UltraMusic's host; music providers keep their own page themes.
 
