@@ -28,6 +28,20 @@ use windows::{
     },
 };
 impl App {
+    pub(super) fn go_forward(&self) {
+        let Some(controller) = self.controller() else {
+            return;
+        };
+        // SAFETY: the current WebView and its history are accessed only on the owning STA.
+        unsafe {
+            if let Ok(web) = controller.CoreWebView2() {
+                let mut available = BOOL(0);
+                if web.CanGoForward(&mut available).is_ok() && available.as_bool() {
+                    let _ = web.GoForward();
+                }
+            }
+        }
+    }
     pub(super) fn go_back(&self) {
         let Some(controller) = self.controller() else {
             return;

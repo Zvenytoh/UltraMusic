@@ -265,3 +265,39 @@ les fichiers utilisés ; les points de réanalyse et contenus inconnus sont excl
 La CI refuse un tag qui ne correspond pas exactement à la version Cargo.
 
 Le bilan détaillé reste dans [REVIEW-CORRECTIONS-2026-10-22.md](REVIEW-CORRECTIONS-2026-10-22.md).
+
+## Version 0.5.0 : barre unifiée et apparence
+
+`native/frame.rs` adapte la zone client à une rangée de titre de 40 pixels
+logiques. `WS_OVERLAPPEDWINDOW`, les bordures latérales/basses et les boutons DWM
+sont conservés. DwmDefWindowProc voit d'abord les messages non clients. La zone
+vide renvoie HTCAPTION, la bordure haute reste redimensionnable et le décalage de
+la fenêtre maximisée est calculé avec les métriques système du DPI courant. La
+zone des boutons est réservée d'après DWMWA_CAPTION_BUTTON_BOUNDS. Les commandes
+réduire/agrandir/fermer restent traitées par Windows.
+
+La barre ne contient plus de séparateurs ou de labels persistants : quatre
+icônes exposent Retour, Avancer, service et paramètres. Les noms restent dans le
+contrôle natif pour les infobulles/accessibilité. HistoryChanged actualise les
+deux directions ; chaque action relit sa disponibilité sur le contrôleur courant.
+
+`native/theme.rs` possède une palette et son pinceau RAII. Le choix sombre par
+défaut, clair ou système est lu avec une limite de 32 octets et remplacé via un
+fichier temporaire ; une erreur d'écriture conserve l'apparence précédente.
+Le mode système interroge UISettings sur le thread UI, avec une initialisation
+WinRT temporaire équilibrée. Le contraste élevé prime sur la palette et restaure
+le dessin des contrôles système. WM_SETTINGCHANGE et WM_THEMECHANGED actualisent
+les ressources sans polling ni worker permanent.
+
+`native/theme_draw.rs` dessine les surfaces des contrôles existants via leurs
+notifications custom-draw. Les HWND, rôles natifs, focus, états cochés et messages
+clavier restent ceux de BUTTON, TRACKBAR et TOOLBAR. Les polices et icônes sont
+créées au DPI courant, avec une famille Segoe UI explicite pour éviter une
+substitution à empattements. Les trois choix de thème passent en colonne lorsque
+la largeur mesurée de leurs libellés ne tient plus sur une rangée.
+
+Ce thème concerne l'hôte. Aucun CSS/script n'est injecté pour modifier la page
+musicale ; les menus/dialogues Windows gardent leur présentation système. Aucune
+API sombre non documentée n'est chargée. Les limites de vérification statique
+restent celles de la revue : aucun rendu ou comportement à l'exécution n'est
+certifié sans ouverture du lecteur, qui n'a pas été autorisée pour cette tâche.

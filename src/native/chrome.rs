@@ -4,15 +4,13 @@ use std::mem::size_of;
 use windows::{
     core::{w, Error, Result, HSTRING, PWSTR},
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM},
+        Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
         Graphics::Gdi::*,
         UI::{Controls::*, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
     },
 };
 pub(super) const PICKER: usize = 20;
-pub(super) const HEIGHT: i32 = 44;
-const FLEX: usize = 30;
-const GAP: usize = 31;
+pub(super) const HEIGHT: i32 = 40;
 // TB_SETBKCOLOR is the toolbar alias for this common-controls message.
 const TB_SETBKCOLOR: u32 = CCM_SETBKCOLOR;
 fn send(hwnd: HWND, msg: u32, wp: usize, lp: isize) -> LRESULT {
@@ -53,11 +51,12 @@ impl App {
                 None,
             )?;
             self.toolbar.set(toolbar);
+            let _ = SetWindowTheme(toolbar, w!(""), w!(""));
             send(
                 toolbar,
                 TB_SETBKCOLOR,
                 0,
-                GetSysColor(COLOR_WINDOW) as isize,
+                self.colors().background.0 as isize,
             );
             send(toolbar, TB_BUTTONSTRUCTSIZE, size_of::<TBBUTTON>(), 0);
             send(
@@ -70,22 +69,20 @@ impl App {
             let mut buttons = Vec::new();
             for (id, image, style, label) in [
                 (BACK, 0, BTNS_BUTTON, "Retour"),
-                (GAP, 8, BTNS_SEP, ""),
-                (
-                    PICKER,
-                    I_IMAGENONE,
-                    BTNS_WHOLEDROPDOWN | BTNS_SHOWTEXT,
-                    "Choisir le service",
-                ),
-                (FLEX, 8, BTNS_SEP, ""),
-                (SETTINGS, 1, BTNS_BUTTON, "Paramètres"),
+                (FORWARD, 1, BTNS_BUTTON, "Avancer"),
+                (PICKER, 2, BTNS_WHOLEDROPDOWN, "Choisir le service"),
+                (SETTINGS, 3, BTNS_BUTTON, "Paramètres"),
             ] {
                 let label: Vec<u16> = label.encode_utf16().chain([0, 0]).collect();
                 let index = send(toolbar, TB_ADDSTRINGW, 0, label.as_ptr() as isize).0;
                 buttons.push(TBBUTTON {
                     iBitmap: image,
                     idCommand: id as i32,
-                    fsState: if id == BACK { 0 } else { TBSTATE_ENABLED as u8 },
+                    fsState: if matches!(id, BACK | FORWARD) {
+                        0
+                    } else {
+                        TBSTATE_ENABLED as u8
+                    },
                     fsStyle: style as u8,
                     iString: index,
                     ..Default::default()
@@ -107,17 +104,14 @@ impl App {
         Ok(())
     }
     pub(super) fn refresh_chrome_resources(&self) -> Result<()> {
-        let resources = ui::Resources::new(self.hwnd)?;
+        let resources = ui::Resources::new(self.hwnd, self.colors().text)?;
         let toolbar = self.toolbar.get();
-        // SAFETY: this owned toolbar receives a scalar system-color message on the UI thread.
-        unsafe {
-            send(
-                toolbar,
-                TB_SETBKCOLOR,
-                0,
-                GetSysColor(COLOR_WINDOW) as isize,
-            );
-        }
+        send(
+            toolbar,
+            TB_SETBKCOLOR,
+            0,
+            self.colors().background.0 as isize,
+        );
         ui::apply_font(toolbar, resources.font.0);
         send(toolbar, TB_SETIMAGELIST, 0, resources.images.0);
         let image_size = px(self.hwnd, 16) as u32;
@@ -127,7 +121,7 @@ impl App {
             0,
             ((image_size << 16) | image_size) as isize,
         );
-        let size = px(self.hwnd, 32) as u32;
+        let size = px(self.hwnd, 28) as u32;
         send(toolbar, TB_SETBUTTONSIZE, 0, ((size << 16) | size) as isize);
         let old = self.ui.replace(Some(resources));
         drop(old);
@@ -157,34 +151,18 @@ impl App {
         unsafe {
             let mut bounds = RECT::default();
             let _ = GetClientRect(self.hwnd, &mut bounds);
-            let font = self.ui.borrow().as_ref().map(|r| r.font.0);
-            let mut extent = SIZE::default();
-            if let Some(font) = font {
-                let dc = GetDC(Some(toolbar));
-                let old = SelectObject(dc, font.into());
-                let label: Vec<u16> = self.service.get().label().encode_utf16().collect();
-                let _ = GetTextExtentPoint32W(dc, &label, &mut extent);
-                SelectObject(dc, old);
-                ReleaseDC(Some(toolbar), dc);
-            }
-            let provider = (extent.cx + px(self.hwnd, 40))
-                .min((bounds.right - px(self.hwnd, 96)).max(px(self.hwnd, 64)));
-            self.toolbar_width(BACK, px(self.hwnd, 32));
-            self.toolbar_width(SETTINGS, px(self.hwnd, 32));
-            self.toolbar_width(PICKER, provider);
-            self.toolbar_width(GAP, px(self.hwnd, 8));
-            self.toolbar_width(
-                FLEX,
-                (bounds.right - px(self.hwnd, 88) - provider).max(px(self.hwnd, 8)),
-            );
+            self.toolbar_width(BACK, px(self.hwnd, 28));
+            self.toolbar_width(FORWARD, px(self.hwnd, 28));
+            self.toolbar_width(PICKER, px(self.hwnd, 36));
+            self.toolbar_width(SETTINGS, px(self.hwnd, 28));
             send(toolbar, TB_AUTOSIZE, 0, 0);
             let _ = SetWindowPos(
                 toolbar,
                 None,
-                px(self.hwnd, 8),
+                px(self.hwnd, 12),
                 px(self.hwnd, 6),
-                (bounds.right - px(self.hwnd, 16)).max(0),
-                px(self.hwnd, 32),
+                px(self.hwnd, 120),
+                px(self.hwnd, 28),
                 SWP_NOZORDER | SWP_NOACTIVATE,
             );
             let _ = InvalidateRect(Some(self.hwnd), None, false);
@@ -222,21 +200,27 @@ impl App {
         self.refresh_settings();
     }
     pub(super) fn refresh_navigation(&self) {
-        let mut enabled = windows::core::BOOL(0);
-        if let Some(controller) = self.controller() {
-            // SAFETY: the current controller and toolbar are confined to the UI STA.
-            unsafe {
-                if let Ok(web) = controller.CoreWebView2() {
-                    let _ = web.CanGoBack(&mut enabled);
+        for (id, forward) in [(BACK, false), (FORWARD, true)] {
+            let mut enabled = windows::core::BOOL(0);
+            if let Some(controller) = self.controller() {
+                // SAFETY: navigation interfaces and toolbar stay on the UI STA.
+                unsafe {
+                    if let Ok(web) = controller.CoreWebView2() {
+                        if forward {
+                            let _ = web.CanGoForward(&mut enabled);
+                        } else {
+                            let _ = web.CanGoBack(&mut enabled);
+                        }
+                    }
                 }
             }
+            send(
+                self.toolbar.get(),
+                TB_ENABLEBUTTON,
+                id,
+                isize::from(enabled.as_bool()),
+            );
         }
-        send(
-            self.toolbar.get(),
-            TB_ENABLEBUTTON,
-            BACK,
-            isize::from(enabled.as_bool()),
-        );
     }
     pub(super) fn header_action(&self, action: isize) {
         match action {
@@ -363,15 +347,7 @@ impl App {
                     }
                     if header.hwndFrom == self.toolbar.get() && header.code == NM_CUSTOMDRAW {
                         let draw = &*(lp.0 as *const NMTBCUSTOMDRAW);
-                        if draw.nmcd.dwDrawStage == CDDS_PREPAINT {
-                            return Some(LRESULT(CDRF_NOTIFYITEMDRAW as isize));
-                        }
-                        if draw.nmcd.dwDrawStage == CDDS_ITEMPREPAINT
-                            && matches!(draw.nmcd.dwItemSpec, FLEX | GAP)
-                        {
-                            // These native separator items provide spacing, not visible rules.
-                            return Some(LRESULT(CDRF_SKIPDEFAULT as isize));
-                        }
+                        return Some(self.draw_toolbar(draw));
                     }
                     None
                 }
@@ -388,8 +364,7 @@ impl App {
                     let dc = BeginPaint(self.hwnd, &mut paint);
                     let mut r = RECT::default();
                     let _ = GetClientRect(self.hwnd, &mut r);
-                    r.bottom = px(self.hwnd, HEIGHT).min(r.bottom);
-                    FillRect(dc, &r, GetSysColorBrush(COLOR_WINDOW));
+                    super::theme::fill(dc, &r, self.colors().background);
                     let _ = EndPaint(self.hwnd, &paint);
                     Some(LRESULT(0))
                 }

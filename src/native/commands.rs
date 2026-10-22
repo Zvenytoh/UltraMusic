@@ -15,6 +15,10 @@ pub(super) const VOLUME_UP: usize = 9;
 pub(super) const SETTINGS: usize = 13;
 pub(super) const BLOCKER: usize = 14;
 pub(super) const BACK: usize = 15;
+pub(super) const FORWARD: usize = 19;
+pub(super) const THEME_DARK: usize = 16;
+pub(super) const THEME_LIGHT: usize = 17;
+pub(super) const THEME_SYSTEM: usize = 18;
 pub(super) const SERVICES: [(usize, Service); 3] = [
     (11, Service::Apple),
     (10, Service::Youtube),
@@ -47,6 +51,10 @@ impl App {
             UPDATE => self.check_updates(true),
             BLOCKER => self.toggle_blocker(),
             BACK => self.go_back(),
+            FORWARD => self.go_forward(),
+            THEME_DARK => self.set_appearance(super::theme::Choice::Dark),
+            THEME_LIGHT => self.set_appearance(super::theme::Choice::Light),
+            THEME_SYSTEM => self.set_appearance(super::theme::Choice::System),
             RESTART => {
                 if dialog(
                     Some(self.hwnd),

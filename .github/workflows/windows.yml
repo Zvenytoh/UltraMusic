@@ -69,14 +69,15 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
-          - Refined Windows toolbar with consistent system icons and unobtrusive spacing.
-          - Resizable settings with clear headings, uniform backgrounds and DPI-aware scrolling.
-          - Volume gestures reuse audio sessions and save preferences when adjustment ends.
-          - Explicit feedback when an audio preference cannot be saved.
-          - Required blocker deactivation failures stop navigation safely.
-          - Update preparation is acknowledged before the player closes.
-          - Separate update phases, bounded file retention and protected active downloads.
-          - Release tags are checked against the application package version.
+          - A single compact navigation/title row inspired by the approved Codex reference.
+          - Back, Forward, workspace and Settings icons, without persistent menu labels.
+          - Native Windows caption buttons, resizing and draggable empty title space.
+          - Dark appearance by default, with remembered Dark / Light / System choices.
+          - Shared charcoal/light palettes, explicit Segoe typography and DPI-aware controls.
+          - Adaptive settings layout and system high-contrast fallback.
+          - Existing update integrity checks, service sessions and audio controls are retained.
+
+          The appearance setting affects UltraMusic's host; music providers keep their own page themes.
 
           Requires Windows 11 x64 and an Internet connection. Music service
           accounts, subscriptions and playback availability are managed by each provider.

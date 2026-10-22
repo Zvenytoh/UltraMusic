@@ -83,6 +83,7 @@ impl App {
             let mut positions = Vec::new();
             let mut y = margin;
             for (group, items) in [
+                (56, &[THEME_DARK, THEME_LIGHT, THEME_SYSTEM][..]),
                 (50, &[51, SLIDER, MUTE, COMPAT, 52][..]),
                 (53, &[BLOCKER, STATUS, 54][..]),
                 (55, &[VERSION, UPDATE][..]),
@@ -100,6 +101,47 @@ impl App {
                     },
                 ));
                 y += header_height + px(hwnd, 16);
+                if group == 56 {
+                    let min_width = items
+                        .iter()
+                        .map(|id| {
+                            let label: Vec<u16> = GetDlgItem(Some(hwnd), *id as i32)
+                                .map(control_text)
+                                .unwrap_or_default()
+                                .encode_utf16()
+                                .collect();
+                            let mut size = windows::Win32::Foundation::SIZE::default();
+                            let _ = GetTextExtentPoint32W(dc, &label, &mut size);
+                            size.cx + px(hwnd, 40)
+                        })
+                        .max()
+                        .unwrap_or(0);
+                    let columns = if inner >= 3 * min_width + 2 * gap {
+                        3
+                    } else {
+                        1
+                    };
+                    let width = (inner - (columns - 1) * gap) / columns;
+                    let height = line + gap;
+                    for (index, &id) in items.iter().enumerate() {
+                        let column = index as i32 % columns;
+                        let row = index as i32 / columns;
+                        let left = margin + column * (width + gap);
+                        let top = y + row * (height + gap);
+                        positions.push((
+                            id,
+                            RECT {
+                                left,
+                                top,
+                                right: left + width,
+                                bottom: top + height,
+                            },
+                        ));
+                    }
+                    y += ((items.len() as i32 + columns - 1) / columns) * (height + gap)
+                        + px(hwnd, 24);
+                    continue;
+                }
                 for &id in items {
                     let x = margin;
                     let (width, height) = if id == SLIDER {

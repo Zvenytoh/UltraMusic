@@ -4,9 +4,9 @@
   <p><strong>Your music. A native Windows home.</strong></p>
   <p>Apple Music, YouTube Music and YouTube in one focused desktop player.</p>
   <p>
-    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.3/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
+    <a href="https://github.com/Zvenytoh/UltraMusic/releases/download/v0.5.0/UltraMusic-Setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows-Install_UltraMusic-E32636?style=for-the-badge" alt="Download UltraMusic for Windows"></a>
   </p>
-  <p>Windows 11 · x64 · Version 0.4.3</p>
+  <p>Windows 11 · x64 · Version 0.5.0</p>
   <p>
     <a href="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml"><img src="https://github.com/Zvenytoh/UltraMusic/actions/workflows/windows.yml/badge.svg?branch=main" alt="Windows build"></a>
     <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native-DEA584?logo=rust&amp;logoColor=white" alt="Built with Rust"></a>
@@ -37,8 +37,10 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Features
 
-- **Native Windows chrome** — the standard Windows title bar and caption buttons,
-  with a compact, themed toolbar for Back, service selection and settings.
+- **Focused Windows header** — one compact row with Back, Forward, service
+  selection and Settings icons, alongside native Windows caption buttons.
+- **Dark by default** — charcoal surfaces, Segoe typography and a remembered
+  Dark / Light / System appearance choice.
 - **Switch your workspace** — choose Apple Music, YouTube Music or YouTube from
   the toolbar; one player stays active and your selection is remembered.
 - **Settings at hand** — use the Settings icon for application volume, mute,
@@ -59,7 +61,7 @@ installed WebView2 runtime rather than shipping a separate browser engine.
 
 ## Installation
 
-1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.4.3/UltraMusic-Setup.exe)**.
+1. **[Download UltraMusic Setup](https://github.com/Zvenytoh/UltraMusic/releases/download/v0.5.0/UltraMusic-Setup.exe)**.
 2. Run `UltraMusic-Setup.exe` and follow the installation wizard.
 3. Open **UltraMusic** from the Start menu.
 
@@ -70,12 +72,13 @@ runtime using Microsoft's bootstrapper. An Internet connection is required.
 Remove the application through **Windows Settings → Apps → Installed apps**.
 Your music service session data is kept separately from the program files.
 
-[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.4.3)
+[Release notes and downloads](https://github.com/Zvenytoh/UltraMusic/releases/tag/v0.5.0)
 
 ## Everyday controls
 
-Use **← Back** to return to the previous page, the service button to switch
-providers, and **Settings** to open settings. **F6** moves between the player
+Use **Back** and **Forward** to move through the current service’s history,
+the workspace icon to switch providers, and the gear icon to open **Settings**.
+Hover an icon to see its name; the workspace tooltip identifies the current service. **F6** moves between the player
 and toolbar; **Arrow keys** move between toolbar actions and **Tab** returns to
 the player. **Space** activates an action, **Ctrl+,** opens settings, and
 **Escape** closes settings or returns focus from the toolbar to the player.
@@ -102,9 +105,19 @@ Your volume and mute preferences are remembered between launches.
 Volume changes are saved when you finish adjusting the slider. If a preference
 cannot be saved, UltraMusic reports it and keeps the current setting in memory.
 
+## Appearance
+
+UltraMusic starts in **Dark** mode. Open **Settings → Appearance** to select
+**Dark**, **Light** or **System**. Your choice is applied without restarting
+the player and remembered for the next launch. System mode follows the Windows
+color preference; high contrast takes precedence over the custom palette.
+
+The music provider controls its own page theme. Windows-owned menus and dialogs
+retain their system presentation.
+
 ## Choose your service
 
-Open the service picker in the toolbar and choose **Apple Music**,
+Open the workspace picker in the header and choose **Apple Music**,
 **YouTube Music** or **YouTube**. The same choices are available in the tray menu.
 The selected service has a check mark and is remembered for future launches.
 Switching interrupts playback and opens the
@@ -184,6 +197,7 @@ actual resource usage depends on the provider and the runtime.
 - The Rust host does not collect or handle your passwords.
 - Cookies and site data stay in `%LOCALAPPDATA%\UltraMusic\WebView2`.
 - The chosen service is saved locally in `%LOCALAPPDATA%\UltraMusic\service.txt`.
+- The host theme is saved in `%LOCALAPPDATA%\UltraMusic\appearance.txt`.
 - No custom analytics or application log files are produced by the host.
 - Remote pages have no Rust host objects or native message bridge.
 - The bundled blocker can inspect/filter Google-service requests and inject its

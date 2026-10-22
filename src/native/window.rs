@@ -94,6 +94,9 @@ pub(super) unsafe extern "system" fn window_proc(
             }
             return LRESULT(0);
         }
+        if let Some(result) = a.frame_message(msg, wp, lp) {
+            return result;
+        }
         if let Some(result) = a.chrome_message(msg, lp) {
             return result;
         }
@@ -142,10 +145,10 @@ pub(super) unsafe extern "system" fn window_proc(
                 );
                 a.resize();
                 let _ = a.refresh_chrome_resources();
+                a.configure_frame();
             }
             WM_THEMECHANGED | WM_SETTINGCHANGE => {
-                let _ = a.refresh_chrome_resources();
-                a.refresh_settings();
+                let _ = a.refresh_appearance();
                 return DefWindowProcW(hwnd, msg, wp, lp);
             }
             TRAY => match lp.0 as u32 {

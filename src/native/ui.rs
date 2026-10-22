@@ -42,6 +42,9 @@ impl Font {
                 0,
                 GetDpiForWindow(hwnd).max(96),
             )?;
+            let face: Vec<u16> = "Segoe UI".encode_utf16().chain(Some(0)).collect();
+            metrics.lfMessageFont.lfFaceName.fill(0);
+            metrics.lfMessageFont.lfFaceName[..face.len()].copy_from_slice(&face);
             if minimum > 0 {
                 metrics.lfMessageFont.lfHeight =
                     -metrics.lfMessageFont.lfHeight.abs().max(px(hwnd, minimum));
@@ -81,17 +84,19 @@ pub(super) struct Resources {
     pub images: HIMAGELIST,
 }
 impl Resources {
-    pub(super) fn new(hwnd: HWND) -> Result<Self> {
+    pub(super) fn new(hwnd: HWND, color: COLORREF) -> Result<Self> {
         let font = Font::new(hwnd)?;
         // SAFETY: image list and its bitmaps are created and used on the UI thread.
         unsafe {
-            let images = ImageList_Create(px(hwnd, 16), px(hwnd, 16), ILC_COLOR32, 2, 0);
+            let images = ImageList_Create(px(hwnd, 16), px(hwnd, 16), ILC_COLOR32, 4, 0);
             if images.is_invalid() {
                 return Err(Error::from_thread());
             }
             let resources = Self { font, images };
-            add_glyph(hwnd, images, '\u{E72B}')?;
-            add_glyph(hwnd, images, '\u{E713}')?;
+            add_glyph(hwnd, images, '\u{E72B}', color)?;
+            add_glyph(hwnd, images, '\u{E72A}', color)?;
+            add_glyph(hwnd, images, '\u{E8A5}', color)?;
+            add_glyph(hwnd, images, '\u{E713}', color)?;
             Ok(resources)
         }
     }
@@ -104,7 +109,7 @@ impl Drop for Resources {
         }
     }
 }
-fn add_glyph(hwnd: HWND, images: HIMAGELIST, glyph: char) -> Result<()> {
+fn add_glyph(hwnd: HWND, images: HIMAGELIST, glyph: char, color: COLORREF) -> Result<()> {
     let side = px(hwnd, 16);
     // SAFETY: every GDI selection is restored; pixels remain valid until bitmap deletion.
     unsafe {
@@ -170,7 +175,7 @@ fn add_glyph(hwnd: HWND, images: HIMAGELIST, glyph: char) -> Result<()> {
             DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
         );
         let _ = GdiFlush();
-        let color = GetSysColor(COLOR_WINDOWTEXT);
+        let color = color.0;
         for pixel in std::slice::from_raw_parts_mut(bits.cast::<u32>(), (side * side) as usize) {
             let alpha = 255 - (*pixel & 255);
             let r = (color & 255) * alpha / 255;

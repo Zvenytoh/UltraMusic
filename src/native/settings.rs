@@ -22,7 +22,11 @@ pub(super) const PERCENT: usize = 41;
 pub(super) const STATUS: usize = 42;
 pub(super) const VERSION: usize = 43;
 // Native children; geometry is measured and owned by settings_layout.rs.
-const ROWS: [(usize, &str, &str, u32); 13] = [
+const ROWS: [(usize, &str, &str, u32); 17] = [
+    (56, "STATIC", "Apparence", 0),
+    (THEME_DARK, "BUTTON", "Sombre", BS_RADIOBUTTON as u32),
+    (THEME_LIGHT, "BUTTON", "Clair", BS_RADIOBUTTON as u32),
+    (THEME_SYSTEM, "BUTTON", "Système", BS_RADIOBUTTON as u32),
     (50, "STATIC", "Audio", 0),
     (51, "STATIC", "Volume de l’application", 0),
     (SLIDER, "msctls_trackbar32", "Volume", TBS_NOTICKS),
@@ -97,7 +101,7 @@ impl App {
                 WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN | WS_THICKFRAME | WS_VSCROLL;
             let mut bounds = RECT {
                 right: px(self.hwnd, 500),
-                bottom: px(self.hwnd, 560),
+                bottom: px(self.hwnd, 620),
                 ..Default::default()
             };
             let _ = AdjustWindowRectExForDpi(
@@ -138,6 +142,7 @@ impl App {
                 return;
             };
             self.settings.set(hwnd);
+            super::theme::caption(hwnd, self.colors());
             self.settings_scroll.set(0);
             self.settings_wheel.set(0);
             if self.create_settings_controls(hwnd).is_err() {
@@ -161,7 +166,10 @@ impl App {
             })
             .ok()?;
             for (id, class, label, style) in ROWS {
-                let tab = if matches!(id, SLIDER | MUTE | COMPAT | BLOCKER) {
+                let tab = if matches!(
+                    id,
+                    SLIDER | MUTE | COMPAT | BLOCKER | THEME_DARK | THEME_LIGHT | THEME_SYSTEM
+                ) {
                     WS_TABSTOP
                 } else {
                     WINDOW_STYLE(0)
@@ -196,6 +204,8 @@ impl App {
                 None,
             )?;
             let slider = GetDlgItem(Some(hwnd), SLIDER as i32)?;
+            // Keep the native trackbar's input behavior, with palette-owned background painting.
+            let _ = SetWindowTheme(slider, w!(""), w!(""));
             send(slider, TBM_SETRANGEMIN, 0, 0);
             send(slider, TBM_SETRANGEMAX, 0, 100);
             send(slider, TBM_SETPAGESIZE, 0, 10);
@@ -211,7 +221,7 @@ impl App {
                 if let Ok(child) = GetDlgItem(Some(hwnd), id as i32) {
                     ui::apply_font(
                         child,
-                        if matches!(id, 50 | 53 | 55) {
+                        if matches!(id, 50 | 53 | 55 | 56) {
                             heading.0
                         } else {
                             font.0
@@ -241,6 +251,18 @@ impl App {
                 (MUTE, self.muted.get()),
                 (COMPAT, self.keep_rendering.get()),
                 (BLOCKER, self.blocker_enabled.get()),
+                (
+                    THEME_DARK,
+                    self.appearance.get() == super::theme::Choice::Dark,
+                ),
+                (
+                    THEME_LIGHT,
+                    self.appearance.get() == super::theme::Choice::Light,
+                ),
+                (
+                    THEME_SYSTEM,
+                    self.appearance.get() == super::theme::Choice::System,
+                ),
             ] {
                 if let Ok(child) = GetDlgItem(Some(hwnd), id as i32) {
                     send(
@@ -304,10 +326,23 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
             WM_COMMAND => {
                 let id = wp.0 & 0xffff;
                 if wp.0 >> 16 == BN_CLICKED as usize
-                    && matches!(id, MUTE | COMPAT | BLOCKER | UPDATE)
+                    && matches!(
+                        id,
+                        MUTE | COMPAT | BLOCKER | UPDATE | THEME_DARK | THEME_LIGHT | THEME_SYSTEM
+                    )
                 {
                     app.command(id);
                 }
+            }
+            WM_NOTIFY => {
+                if let Some(result) = app.draw_settings_control(lp) {
+                    return result;
+                }
+                return DefWindowProcW(hwnd, msg, wp, lp);
+            }
+            WM_ERASEBKGND => {
+                app.paint_settings_background(HDC(wp.0 as *mut _));
+                return LRESULT(1);
             }
             WM_SIZE => app.layout_settings(hwnd),
             WM_VSCROLL => app.settings_vscroll(wp),
@@ -359,22 +394,19 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
                     lp.0 as *mut _,
                 ))
                 .as_bool();
+                let colors = app.colors();
                 SetTextColor(
                     dc,
-                    windows::Win32::Foundation::COLORREF(GetSysColor(
-                        if !enabled || matches!(id, 52 | 54 | 43) {
-                            COLOR_GRAYTEXT
-                        } else {
-                            COLOR_WINDOWTEXT
-                        },
-                    )),
+                    if !enabled || matches!(id, 52 | 54 | 43) {
+                        colors.secondary
+                    } else {
+                        colors.text
+                    },
                 );
-                SetBkColor(
-                    dc,
-                    windows::Win32::Foundation::COLORREF(GetSysColor(COLOR_WINDOW)),
-                );
+                SetBkColor(dc, colors.background);
                 SetBkMode(dc, TRANSPARENT);
-                return LRESULT(GetSysColorBrush(COLOR_WINDOW).0 as isize);
+                let brush = app.palette.borrow().brush;
+                return LRESULT(brush.0 as isize);
             }
             WM_CLOSE => {
                 let _ = DestroyWindow(hwnd);
@@ -409,6 +441,7 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
                 let _ = app.refresh_settings_font(hwnd);
             }
             WM_THEMECHANGED | WM_SETTINGCHANGE => {
+                super::theme::caption(hwnd, app.colors());
                 let _ = app.refresh_settings_font(hwnd);
                 return DefWindowProcW(hwnd, msg, wp, lp);
             }

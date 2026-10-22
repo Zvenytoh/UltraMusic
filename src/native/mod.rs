@@ -4,11 +4,14 @@
 mod blocker;
 mod chrome;
 mod commands;
+mod frame;
 mod instance;
 mod media;
 mod service;
 mod settings;
 mod settings_layout;
+mod theme;
+mod theme_draw;
 mod tray;
 mod ui;
 mod updates;
@@ -60,6 +63,8 @@ struct App {
     icon: HICON,
     toolbar: Cell<HWND>,
     ui: RefCell<Option<ui::Resources>>,
+    appearance: Cell<theme::Choice>,
+    palette: RefCell<theme::Palette>,
     settings_font: RefCell<Option<ui::Font>>,
     settings_heading_font: RefCell<Option<ui::Font>>,
     settings: Cell<HWND>,
@@ -166,11 +171,15 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             None,
         )
         .map_err(|e| e.to_string())?;
+        let appearance = theme::Choice::load();
+        let palette = theme::Palette::new(appearance).map_err(|e| e.to_string())?;
         let state = Rc::new(App {
             hwnd,
             icon,
             toolbar: Cell::new(HWND::default()),
             ui: RefCell::new(None),
+            appearance: Cell::new(appearance),
+            palette: RefCell::new(palette),
             settings_font: RefCell::new(None),
             settings_heading_font: RefCell::new(None),
             settings: Cell::new(HWND::default()),
@@ -209,6 +218,8 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             APP.with(|a| a.borrow_mut().take());
             return Err(error.to_string());
         }
+        theme::caption(hwnd, state.colors());
+        state.configure_frame();
         state.add_tray();
         let _ = ShowWindow(hwnd, SW_SHOW);
         if state.start().is_err() {
