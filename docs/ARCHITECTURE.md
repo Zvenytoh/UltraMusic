@@ -98,7 +98,8 @@ le contrôleur précédent et invalide sa génération avant de recréer le lect
 Le profil, les réglages audio et l'option de rendu sont conservés ; la politique
 de navigation et la relance après mise à jour utilisent le service actif.
 
-`native/theme.rs` applique les attributs DWM de la barre noire. `native/media.rs`
+`native/theme.rs` applique les attributs DWM à la fenêtre de paramètres.
+`native/media.rs`
 gère les commandes ponctuelles du menu de notification : mute natif WebView2,
 volume WASAPI limité aux sessions du processus navigateur et de ses descendants,
 et lecture/pause via une évaluation ponctuelle des éléments média accessibles.
@@ -145,21 +146,17 @@ La désinstallation conserve volontairement les cookies et données de session.
 
 ## Version 0.3 : barre intégrée et paramètres
 
-`native/chrome.rs` supprime le cadre supérieur standard avec `WM_NCCALCSIZE`.
-Depuis 0.4, trois contrôles natifs BUTTON gèrent les commandes de fenêtre ;
-le cadre DWM reste limité à la bordure et aux effets système.
-La barre noire mesure 40 pixels logiques depuis 0.3.2 ; les coordonnées, polices et icônes
-suivent le DPI de la fenêtre. Les limites WebView2 commencent sous cette barre.
-Les contrôles natifs restent distincts du contenu distant. La taille minimale
-évite le chevauchement du sélecteur, des paramètres et des boutons de fenêtre.
+`native/chrome.rs` conserve le cadre et les boutons de légende fournis par
+`WS_OVERLAPPEDWINDOW` ; Windows gère leur taille, leur thème, le redimensionnement
+et les interactions en fenêtre maximisée. Une barre de commandes Win32 à thème
+système occupe 40 pixels logiques sous le titre. Retour appelle l’historique
+WebView2 du service courant. Le sélecteur et les paramètres utilisent les contrôles
+BUTTON natifs ; le contenu distant commence sous la barre.
 
-`native/drawing.rs` dessine lors des événements de peinture et de survol.
-Les icônes utilisent les glyphes vectoriels lissés de Segoe Fluent Icons,
-fourni par Windows 11, à 16 pixels logiques ; aucune police Apple n'est embarquée.
-Les sélections GDI sont restaurées avant de libérer les pinceaux, polices et
-plumes. Les boutons Windows conservent leur nom accessible, leur focus et
-leur activation clavier ; les infobulles lisent ces noms à la demande.
-Le menu des services conserve aussi ses libellés natifs lors du dessin personnalisé.
+`native/drawing.rs` dessine les paramètres lors des événements de peinture.
+Les icônes utilisent Segoe Fluent Icons fourni par Windows 11 ; les sélections
+GDI sont restaurées avant de libérer pinceaux, polices et plumes. La barre
+principale, ses boutons et son menu de services utilisent le thème système.
 
 `native/settings.rs` possède une seule fenêtre de paramètres, sans nouvelle
 boucle de messages. Elle est détruite à la fermeture ou au masquage du lecteur.
@@ -174,21 +171,16 @@ page. Les accélérateurs issus de WebView2 publient un message avec la généra
 du lecteur, puis retournent du callback avant d'ouvrir une fenêtre ou de déplacer
 le focus. Aucun nouveau timer, worker permanent ou WebView secondaire n'est ajouté.
 
-Dans 0.3.2, l'extension DWM couvrait toute la hauteur de la barre et non un seul
-pixel. Les messages de légende sont transmis à `DwmDefWindowProc` avant le
-traitement propre au lecteur, pas seulement `WM_NCHITTEST`. Les boutons de fenêtre
-restent dessinés et gérés par Windows à droite. La place qu'ils occupent est
-réservée avant de positionner les paramètres. Le sélecteur mesure 188 × 28 pixels
-logiques ; la largeur minimale est réduite à 500 pixels logiques, pour faciliter
-les dispositions Windows Snap. La fermeture et la réduction gardent le
-comportement existant de masquage dans la zone de notification.
+Dans 0.3.2, l'extension DWM couvrait la hauteur de la barre noire et les contrôles
+de fenêtre suivaient le cadre natif. Cette présentation a été remplacée en 0.4.1
+par la barre de titre Windows standard et un petit groupe de contrôles système.
 
 Le jeton historique `youtube` et `--youtube` désignent toujours YouTube Music.
 YouTube vidéo utilise `youtube-video` et `--youtube-video`, y compris pour la
 relance après installation. Sa liste d'hôtes HTTPS est explicite et conserve
 les restrictions de permissions, de téléchargement et de liens externes.
 
-## Version 0.4 : bloqueur et boutons de fenêtre
+## Version 0.4 : bloqueur
 
 `native/blocker.rs` active les API d'extensions avant la création de l'environnement
 WebView2. Il charge le paquet uBO Lite local avant la navigation initiale, et
@@ -211,9 +203,12 @@ les releases d'UltraMusic. Les scripts de filtrage de cette extension constituen
 l'exception approuvée à l'évitement des scripts de page permanents ; aucun objet
 hôte, WebMessage ni canal natif n'est ajouté pour les pages distantes.
 
-Les trois boutons de fenêtre utilisent les mêmes rectangles de HWND pour le dessin
-et le hit testing, sans déduire leur position du cadre DWM maximisé. Le parent
-renvoie HTMAXBUTTON pour Windows Snap puis transmet l'appui à BUTTON : Windows
-gère la capture, l'annulation et le relâchement hors du bouton. L'activation passe
-par WM_SYSCOMMAND pour réduire, maximiser/restaurer et fermer vers la notification.
-Les noms accessibles, infobulles, focus et dimensions suivent le DPI.
+## Version 0.4.1 : barre Windows et navigation arrière
+
+La fenêtre utilise de nouveau le cadre standard de `WS_OVERLAPPEDWINDOW` et les
+trois boutons de légende de Windows. Le système fournit leur apparence, leurs
+dimensions, le comportement maximisé et les commandes réduire, agrandir/restaurer
+et fermer vers la notification. Les boutons de Retour, service et paramètres
+sont des contrôles BUTTON rendus par le thème Windows. Retour vérifie
+`CanGoBack` avant d'appeler `GoBack` sur l'interface WebView2 courante ; le
+changement de service crée toujours un nouveau contrôleur et un historique vide.

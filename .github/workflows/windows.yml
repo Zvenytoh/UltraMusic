@@ -59,27 +59,11 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
+          - Standard Windows title bar and caption buttons, including reliable system handling when maximized.
+          - Native Back control for the current music service's WebView history.
+          - System-themed toolbar controls for service selection and settings.
           - Bundled uBO Lite for YouTube and YouTube Music, with a remembered settings switch.
-          - Blocker initialization status and a disable-and-reload action.
-          - Explicit native window buttons with consistent maximized-window hit testing.
-          - A compact 40-pixel header, 28-pixel controls and antialiased system icons.
-          - Quieter hover states, a shorter service picker and reduced visual clutter.
-          - Installer compatibility with legacy updaters that pass extended Windows paths.
-          - A unified black, DPI-aware header with native Windows caption controls.
-          - An illustrated service picker for Apple Music, YouTube Music and YouTube.
-          - Native settings for volume, mute, background rendering and updates.
-          - Keyboard navigation: F6 for the header, Ctrl+, for settings and Escape to return.
-          - Restricted WebView2 device permissions and blocked page downloads.
-          - Correct Windows paths for the update installer and its log.
-          - Fewer audio-session scans when playback stops.
-          - Shared service and audio actions in the header, settings and tray.
-          - Remembered service selection for future launches.
-          - Black native title bar and new red brand identity.
-          - Tray playback, application volume and mute controls.
-          - Startup update checks with installation only after confirmation.
-          - Visible update installation progress, retained installer logs and
-            restored player launch when an update fails.
-          - Verified installer downloads and preserved service sessions.
+          - Verified in-app updates, preserved service sessions and the existing tray controls.
 
           Requires Windows 11 x64 and an Internet connection. Music service
           accounts, subscriptions and playback availability are managed by each provider.

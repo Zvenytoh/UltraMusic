@@ -1,28 +1,45 @@
-//! DPI-aware header with explicit native caption controls and Snap hit testing.
+//! Native Windows title bar and themed client toolbar.
 use super::{commands::*, drawing::*, App};
-use crate::config::Service;
 use std::mem::size_of;
 use windows::{
     core::{w, Result, HSTRING},
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
-        Graphics::{Dwm::*, Gdi::*},
-        UI::{Controls::*, HiDpi::*, Input::KeyboardAndMouse::*, Shell::*, WindowsAndMessaging::*},
+        Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Graphics::Gdi::*,
+        UI::{
+            Controls::*,
+            Input::KeyboardAndMouse::{
+                GetFocus, GetKeyState, SetFocus, VK_CONTROL, VK_ESCAPE, VK_F6, VK_OEM_COMMA,
+            },
+            WindowsAndMessaging::*,
+        },
     },
 };
 
 pub(super) const PICKER: usize = 20;
 pub(super) const HEIGHT: i32 = 40;
 
-/// Native BUTTONs retain keyboard, accessibility and pressed-state behavior.
 pub(super) fn button(parent: HWND, id: usize, label: &str) -> Result<HWND> {
-    // SAFETY: owned child windows and static subclass procedure live on the UI thread.
+    create_button(parent, id, label, true)
+}
+
+fn toolbar_button(parent: HWND, id: usize, label: &str) -> Result<HWND> {
+    create_button(parent, id, label, false)
+}
+
+fn create_button(parent: HWND, id: usize, label: &str, owner_draw: bool) -> Result<HWND> {
+    let style = if owner_draw {
+        BS_OWNERDRAW
+    } else {
+        BS_PUSHBUTTON
+    };
+    // SAFETY: the button is an owned child of the live UI window.
     unsafe {
-        let hwnd = CreateWindowExW(
+        CreateWindowExW(
             Default::default(),
             w!("BUTTON"),
             &HSTRING::from(label),
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(BS_OWNERDRAW as u32),
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(style as u32),
             0,
             0,
             0,
@@ -31,149 +48,25 @@ pub(super) fn button(parent: HWND, id: usize, label: &str) -> Result<HWND> {
             Some(HMENU(id as *mut _)),
             None,
             None,
-        )?;
-        if !SetWindowSubclass(hwnd, Some(button_proc), 1, 0).as_bool() {
-            let error = windows::core::Error::from_thread();
-            let _ = DestroyWindow(hwnd);
-            return Err(error);
-        }
-        // Tooltip text is requested from the current native button name, avoiding
-        // pointers to temporary Rust strings and keeping state changes accessible.
-        if let Ok(tip) = CreateWindowExW(
-            WS_EX_TOPMOST,
-            TOOLTIPS_CLASSW,
-            None,
-            WS_POPUP | WINDOW_STYLE(TTS_ALWAYSTIP | TTS_NOPREFIX),
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            Some(hwnd),
-            None,
-            None,
-            None,
-        ) {
-            let tool = TTTOOLINFOW {
-                cbSize: size_of::<TTTOOLINFOW>() as u32,
-                uFlags: TTF_IDISHWND | TTF_SUBCLASS,
-                hwnd,
-                uId: hwnd.0 as usize,
-                lpszText: windows::core::PWSTR(-1isize as *mut u16),
-                ..Default::default()
-            };
-            if SendMessageW(
-                tip,
-                TTM_ADDTOOLW,
-                Some(WPARAM(0)),
-                Some(LPARAM(&tool as *const _ as isize)),
-            )
-            .0 == 0
-            {
-                let _ = DestroyWindow(tip);
-            } else {
-                let _ = SetWindowSubclass(hwnd, Some(button_proc), 1, tip.0 as usize);
-            }
-        }
-        Ok(hwnd)
-    }
-}
-
-unsafe extern "system" fn button_proc(
-    hwnd: HWND,
-    msg: u32,
-    wp: WPARAM,
-    lp: LPARAM,
-    _: usize,
-    tip: usize,
-) -> LRESULT {
-    // SAFETY: Windows invokes this only for a live subclassed BUTTON.
-    unsafe {
-        match msg {
-            WM_NCHITTEST if matches!(GetDlgCtrlID(hwnd) as usize, MINIMIZE | MAXIMIZE | CLOSE) => {
-                // Let the parent expose HTMAXBUTTON for Windows Snap. Mouse presses
-                // are forwarded back to this BUTTON for its native capture behavior.
-                return LRESULT(HTTRANSPARENT as isize);
-            }
-            WM_NOTIFY => {
-                let header = &*(lp.0 as *const NMHDR);
-                if header.code == TTN_GETDISPINFOW {
-                    let info = &mut *(lp.0 as *mut NMTTDISPINFOW);
-                    GetWindowTextW(hwnd, &mut info.szText);
-                    info.lpszText = windows::core::PWSTR(info.szText.as_mut_ptr());
-                    return LRESULT(0);
-                }
-            }
-            WM_MOUSEMOVE => {
-                let mut track = TRACKMOUSEEVENT {
-                    cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
-                    dwFlags: TME_LEAVE,
-                    hwndTrack: hwnd,
-                    ..Default::default()
-                };
-                let _ = TrackMouseEvent(&mut track);
-                let _ = InvalidateRect(Some(hwnd), None, false);
-            }
-            WM_MOUSELEAVE | WM_SETFOCUS | WM_KILLFOCUS => {
-                let _ = InvalidateRect(Some(hwnd), None, false);
-            }
-            WM_NCDESTROY => {
-                let _ = RemoveWindowSubclass(hwnd, Some(button_proc), 1);
-                let tooltip = HWND(tip as *mut _);
-                if !tooltip.is_invalid() && IsWindow(Some(tooltip)).as_bool() {
-                    let _ = DestroyWindow(tooltip);
-                }
-            }
-            _ => {}
-        }
-        DefSubclassProc(hwnd, msg, wp, lp)
+        )
     }
 }
 
 pub(super) fn button_background(item: &DRAWITEMSTRUCT) {
-    // SAFETY: owner-draw data comes from the live button's WM_DRAWITEM.
-    unsafe {
-        let mut point = POINT::default();
-        let mut bounds = RECT::default();
-        let hovered = GetCursorPos(&mut point).is_ok()
-            && GetWindowRect(item.hwndItem, &mut bounds).is_ok()
-            && PtInRect(&bounds, point).as_bool();
-        let caption = matches!(item.CtlID as usize, MINIMIZE | MAXIMIZE | CLOSE);
-        let color = if (hovered || item.itemState.0 & ODS_SELECTED.0 != 0)
-            && item.CtlID as usize == CLOSE
-        {
-            windows::Win32::Foundation::COLORREF(0x2311C4)
-        } else if hovered || item.itemState.0 & ODS_SELECTED.0 != 0 {
-            HOVER
-        } else if item.CtlID as usize == SETTINGS || caption {
-            BLACK
+    let selected = item.itemState.0 & ODS_SELECTED.0 != 0;
+    let color = if selected { HOVER } else { PANEL };
+    fill(item.hDC, &item.rcItem, BLACK);
+    round(
+        item.hDC,
+        &item.rcItem,
+        color,
+        if item.itemState.0 & ODS_FOCUS.0 != 0 {
+            WHITE
         } else {
-            PANEL
-        };
-        if caption {
-            fill(item.hDC, &item.rcItem, color);
-            if item.itemState.0 & ODS_FOCUS.0 != 0 {
-                let mut focus = item.rcItem;
-                let edge = px(item.hwndItem, 5);
-                let _ = InflateRect(&mut focus, -edge, -edge);
-                let _ = DrawFocusRect(item.hDC, &focus);
-            }
-            return;
-        }
-        fill(item.hDC, &item.rcItem, BLACK);
-        round(
-            item.hDC,
-            &item.rcItem,
-            color,
-            if item.itemState.0 & ODS_FOCUS.0 != 0 {
-                WHITE
-            } else if matches!(item.CtlID as usize, SETTINGS | PICKER) {
-                color
-            } else {
-                LINE
-            },
-            px(item.hwndItem, 10),
-        );
-    }
+            LINE
+        },
+        px(item.hwndItem, 10),
+    );
 }
 
 impl App {
@@ -181,7 +74,7 @@ impl App {
         if action == 1 {
             // SAFETY: the native service button belongs to this UI thread.
             unsafe {
-                let _ = SetFocus(Some(self.service_button.get()));
+                let _ = SetFocus(Some(self.back_button.get()));
             }
         } else if action == 2 {
             self.open_settings();
@@ -203,15 +96,15 @@ impl App {
                 return false;
             }
             let focus = GetFocus();
-            let in_header = focus == self.service_button.get()
-                || focus == self.settings_button.get()
-                || self.caption_buttons.get().contains(&focus);
+            let in_header = focus == self.back_button.get()
+                || focus == self.service_button.get()
+                || focus == self.settings_button.get();
             if message.message == WM_KEYDOWN {
                 if message.wParam.0 == VK_F6.0 as usize {
                     if in_header {
                         self.focus_player();
                     } else {
-                        let _ = SetFocus(Some(self.service_button.get()));
+                        let _ = SetFocus(Some(self.back_button.get()));
                     }
                     return true;
                 }
@@ -226,7 +119,6 @@ impl App {
                     return true;
                 }
             }
-            // Restrict dialog navigation to the header so webpage keyboard input stays native.
             in_header && IsDialogMessageW(self.hwnd, message).as_bool()
         }
     }
@@ -235,13 +127,15 @@ impl App {
         if let Some(controller) = self.controller() {
             // SAFETY: controller belongs to this UI STA.
             unsafe {
-                let _ = controller.MoveFocus(webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
+                let _ = controller.MoveFocus(
+                    webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC,
+                );
             }
         }
     }
 
     pub(super) fn create_chrome(&self) -> Result<()> {
-        // SAFETY: initialize the native tooltip class before creating header controls.
+        // SAFETY: initialize native common controls before creating toolbar buttons.
         unsafe {
             InitCommonControlsEx(&INITCOMMONCONTROLSEX {
                 dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
@@ -249,139 +143,82 @@ impl App {
             })
             .ok()?;
         }
+        self.back_button
+            .set(toolbar_button(self.hwnd, BACK, "← Retour")?);
         self.service_button
-            .set(button(self.hwnd, PICKER, "Choisir le service")?);
+            .set(toolbar_button(self.hwnd, PICKER, "Choisir le service")?);
         self.settings_button
-            .set(button(self.hwnd, SETTINGS, "Paramètres")?);
-        // Store each handle immediately so partial initialization is cleaned up normally.
-        for (index, (id, label)) in [
-            (MINIMIZE, "Réduire"),
-            (MAXIMIZE, "Maximiser"),
-            (CLOSE, "Fermer dans la zone de notification"),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let mut buttons = self.caption_buttons.get();
-            buttons[index] = button(self.hwnd, id, label)?;
-            self.caption_buttons.set(buttons);
-        }
-        self.extend_frame();
-        // SAFETY: recalculate nonclient layout now that App exists for WM_NCCALCSIZE.
-        unsafe {
-            SetWindowPos(
-                self.hwnd,
-                None,
-                0,
-                0,
-                0,
-                0,
-                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-            )?;
-        }
+            .set(toolbar_button(self.hwnd, SETTINGS, "Paramètres")?);
         self.layout_chrome();
         self.refresh_ui();
         Ok(())
     }
 
-    pub(super) fn extend_frame(&self) {
-        // SAFETY: the margins are synchronous inputs to DWM for our live window.
-        unsafe {
-            let _ = DwmExtendFrameIntoClientArea(
-                self.hwnd,
-                &MARGINS {
-                    // Caption controls are opaque child windows, independent of DWM offsets.
-                    cyTopHeight: 1,
-                    ..Default::default()
-                },
-            );
-        }
-    }
-
     pub(super) fn layout_chrome(&self) {
-        // SAFETY: both children belong to this window on the UI thread.
+        // SAFETY: child buttons belong to this window and all sizes are DPI-aware.
         unsafe {
             let mut bounds = RECT::default();
             let _ = GetClientRect(self.hwnd, &mut bounds);
-            let caption_width = px(self.hwnd, 46);
-            for (index, child) in self.caption_buttons.get().into_iter().enumerate() {
+            let height = px(self.hwnd, 30);
+            let top = px(self.hwnd, 5);
+            for (child, x, width) in [
+                (self.back_button.get(), px(self.hwnd, 12), px(self.hwnd, 88)),
+                (
+                    self.service_button.get(),
+                    px(self.hwnd, 108),
+                    px(self.hwnd, 200),
+                ),
+                (
+                    self.settings_button.get(),
+                    bounds.right - px(self.hwnd, 112),
+                    px(self.hwnd, 100),
+                ),
+            ] {
                 let _ = SetWindowPos(
                     child,
                     None,
-                    bounds.right - caption_width * (3 - index as i32),
-                    0,
-                    caption_width,
-                    px(self.hwnd, HEIGHT),
+                    x,
+                    top,
+                    width,
+                    height,
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
-                if index == 1 {
-                    let _ = SetWindowTextW(
-                        child,
-                        if IsZoomed(self.hwnd).as_bool() {
-                            w!("Restaurer")
-                        } else {
-                            w!("Maximiser")
-                        },
-                    );
-                }
-                let _ = InvalidateRect(Some(child), None, false);
             }
-            let x = bounds.right - caption_width * 3 - px(self.hwnd, 40);
-            let _ = SetWindowPos(
-                self.settings_button.get(),
-                None,
-                x,
-                px(self.hwnd, 6),
-                px(self.hwnd, 28),
-                px(self.hwnd, 28),
-                SWP_NOZORDER | SWP_NOACTIVATE,
-            );
-            let _ = SetWindowPos(
-                self.service_button.get(),
-                None,
-                px(self.hwnd, 44),
-                px(self.hwnd, 6),
-                px(self.hwnd, 188),
-                px(self.hwnd, 28),
-                SWP_NOZORDER | SWP_NOACTIVATE,
-            );
             let header = rect(0, 0, bounds.right, px(self.hwnd, HEIGHT));
             let _ = InvalidateRect(Some(self.hwnd), Some(&header), false);
         }
     }
 
     pub(super) fn refresh_ui(&self) {
-        // SAFETY: optional owned windows are used only while alive on this thread.
+        // SAFETY: the service button is owned by this live UI window.
         unsafe {
             let button = self.service_button.get();
             if !button.is_invalid() {
                 let _ = SetWindowTextW(
                     button,
-                    &HSTRING::from(format!(
-                        "Choisir le service : {}",
-                        self.service.get().label()
-                    )),
+                    &HSTRING::from(format!("{} ▾", self.service.get().label())),
                 );
-                let _ = InvalidateRect(Some(button), None, false);
             }
         }
         self.refresh_settings();
     }
 
     pub(super) fn service_menu(&self) {
-        // SAFETY: the popup owns no Rust pointers; it is destroyed after its modal loop.
+        // SAFETY: the popup owns only native menu strings and is destroyed after use.
         unsafe {
             let Ok(menu) = CreatePopupMenu() else { return };
             for (id, service) in SERVICES {
-                // Keep a copied native label for accessibility, then enable custom painting.
-                let _ = AppendMenuW(menu, MF_STRING, id, &HSTRING::from(service.label()));
-                let info = MENUITEMINFOW {
-                    cbSize: size_of::<MENUITEMINFOW>() as u32,
-                    fMask: MIIM_FTYPE,
-                    fType: MFT_OWNERDRAW,
-                    ..Default::default()
+                let selected = if self.service.get() == service {
+                    MF_CHECKED
+                } else {
+                    MF_UNCHECKED
                 };
-                let _ = SetMenuItemInfoW(menu, id as u32, false, &info);
+                let _ = AppendMenuW(
+                    menu,
+                    MF_STRING | selected,
+                    id,
+                    &HSTRING::from(service.label()),
+                );
             }
             let mut bounds = RECT::default();
             let _ = GetWindowRect(self.service_button.get(), &mut bounds);
@@ -390,7 +227,7 @@ impl App {
                 menu,
                 TPM_RETURNCMD | TPM_LEFTALIGN,
                 bounds.left,
-                bounds.bottom + px(self.hwnd, 6),
+                bounds.bottom,
                 None,
                 self.hwnd,
                 None,
@@ -404,285 +241,32 @@ impl App {
         }
     }
 
-    pub(super) fn draw_header_button(&self, item: &DRAWITEMSTRUCT) {
-        let hwnd = item.hwndItem;
-        button_background(item);
-        if matches!(item.CtlID as usize, MINIMIZE | MAXIMIZE | CLOSE) {
-            let glyph = match item.CtlID as usize {
-                MINIMIZE => Icon::Minimize,
-                CLOSE => Icon::Close,
-                // SAFETY: this window belongs to the paint thread.
-                _ if unsafe { IsZoomed(self.hwnd).as_bool() } => Icon::Restore,
-                _ => Icon::Maximize,
-            };
-            icon(
-                item.hDC,
-                hwnd,
-                glyph,
-                (item.rcItem.right - px(hwnd, 22)) / 2,
-                (item.rcItem.bottom - px(hwnd, 22)) / 2,
-                WHITE,
-            );
-        } else if item.CtlID as usize == SETTINGS {
-            icon(item.hDC, hwnd, Icon::Gear, px(hwnd, 3), px(hwnd, 3), WHITE);
-        } else {
-            icon(
-                item.hDC,
-                hwnd,
-                service_icon(self.service.get()),
-                px(hwnd, 6),
-                px(hwnd, 3),
-                RED,
-            );
-            text(
-                item.hDC,
-                hwnd,
-                self.service.get().label(),
-                rect(px(hwnd, 34), 0, px(hwnd, 124), px(hwnd, 28)),
-                12,
-                WHITE,
-            );
-            icon(
-                item.hDC,
-                hwnd,
-                Icon::Chevron,
-                px(hwnd, 160),
-                px(hwnd, 3),
-                MUTED,
-            );
-        }
-    }
-
-    pub(super) fn chrome_message(&self, msg: u32, wp: WPARAM, lp: LPARAM) -> Option<LRESULT> {
-        // SAFETY: message-specific pointers come from Windows and live for this dispatch.
+    pub(super) fn chrome_message(&self, msg: u32, lp: LPARAM) -> Option<LRESULT> {
+        // SAFETY: message pointers are borrowed from Windows for this dispatch only.
         unsafe {
-            if msg == WM_NCHITTEST {
-                if let Some((_, hit)) = self.caption_hit(lp) {
-                    return Some(LRESULT(hit as isize));
-                }
-            }
-            if matches!(msg, WM_NCMOUSEMOVE | WM_NCMOUSELEAVE) {
-                for button in self.caption_buttons.get() {
-                    let _ = InvalidateRect(Some(button), None, false);
-                }
-                if msg == WM_NCMOUSEMOVE {
-                    let mut track = TRACKMOUSEEVENT {
-                        cbSize: size_of::<TRACKMOUSEEVENT>() as u32,
-                        dwFlags: TME_LEAVE | TME_NONCLIENT,
-                        hwndTrack: self.hwnd,
-                        ..Default::default()
-                    };
-                    let _ = TrackMouseEvent(&mut track);
-                    if let Some((button, _)) = self.caption_hit(lp) {
-                        self.caption_mouse(button, WM_MOUSEMOVE, lp);
-                    }
-                }
-            }
-            if matches!(msg, WM_NCLBUTTONDOWN | WM_NCLBUTTONDBLCLK) {
-                if let Some((button, _)) = self.caption_hit(lp) {
-                    self.caption_mouse(button, WM_LBUTTONDOWN, lp);
-                    return Some(LRESULT(0));
-                }
-            }
-            // These controls own caption input. Delegating hit testing back to
-            // DWM would reintroduce invisible caption regions at different offsets.
             match msg {
-                WM_NCCALCSIZE if wp.0 != 0 => {
-                    if IsZoomed(self.hwnd).as_bool() {
-                        let params = &mut *(lp.0 as *mut NCCALCSIZE_PARAMS);
-                        let dpi = GetDpiForWindow(self.hwnd);
-                        let x = GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi)
-                            + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-                        let y = GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi)
-                            + GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-                        params.rgrc[0].left += x;
-                        params.rgrc[0].right -= x;
-                        params.rgrc[0].top += y;
-                        params.rgrc[0].bottom -= y;
-                    }
-                    return Some(LRESULT(0));
-                }
-                WM_NCHITTEST => {
-                    let mut point = POINT {
-                        x: lp.0 as i16 as i32,
-                        y: (lp.0 >> 16) as i16 as i32,
-                    };
-                    let _ = ScreenToClient(self.hwnd, &mut point);
-                    let mut bounds = RECT::default();
-                    let _ = GetClientRect(self.hwnd, &mut bounds);
-                    let edge = px(self.hwnd, 6);
-                    if !IsZoomed(self.hwnd).as_bool() {
-                        let left = point.x < edge;
-                        let right = point.x >= bounds.right - edge;
-                        let top = point.y < edge;
-                        let bottom = point.y >= bounds.bottom - edge;
-                        let hit = match (left, right, top, bottom) {
-                            (true, _, true, _) => HTTOPLEFT,
-                            (_, true, true, _) => HTTOPRIGHT,
-                            (true, _, _, true) => HTBOTTOMLEFT,
-                            (_, true, _, true) => HTBOTTOMRIGHT,
-                            (true, _, _, _) => HTLEFT,
-                            (_, true, _, _) => HTRIGHT,
-                            (_, _, true, _) => HTTOP,
-                            (_, _, _, true) => HTBOTTOM,
-                            _ => HTCLIENT,
-                        };
-                        if hit != HTCLIENT {
-                            return Some(LRESULT(hit as isize));
-                        }
-                    }
-                    if point.y < px(self.hwnd, HEIGHT) {
-                        // Child buttons handle their own input; the surrounding header drags.
-                        return Some(LRESULT(HTCAPTION as isize));
-                    }
-                    return Some(LRESULT(HTCLIENT as isize));
-                }
                 WM_GETMINMAXINFO => {
                     let info = &mut *(lp.0 as *mut MINMAXINFO);
-                    info.ptMinTrackSize = POINT {
+                    info.ptMinTrackSize = windows::Win32::Foundation::POINT {
                         x: px(self.hwnd, 500),
                         y: px(self.hwnd, 440),
                     };
-                    return Some(LRESULT(0));
+                    Some(LRESULT(0))
                 }
                 WM_PAINT => {
                     let mut paint = PAINTSTRUCT::default();
                     let dc = BeginPaint(self.hwnd, &mut paint);
-                    let mut bounds = RECT::default();
-                    let _ = GetClientRect(self.hwnd, &mut bounds);
-                    fill(dc, &bounds, BLACK);
-                    let _ = DrawIconEx(
-                        dc,
-                        px(self.hwnd, 12),
-                        px(self.hwnd, 10),
-                        self.icon,
-                        px(self.hwnd, 20),
-                        px(self.hwnd, 20),
-                        0,
-                        None,
-                        DI_NORMAL,
-                    );
+                    let color = COLORREF(GetSysColor(COLOR_BTNFACE));
+                    let mut header = rect(0, 0, 0, px(self.hwnd, HEIGHT));
+                    let _ = GetClientRect(self.hwnd, &mut header);
+                    header.bottom = px(self.hwnd, HEIGHT).min(header.bottom);
+                    fill(dc, &header, color);
                     let _ = EndPaint(self.hwnd, &paint);
-                    return Some(LRESULT(0));
+                    Some(LRESULT(0))
                 }
-                WM_ERASEBKGND => return Some(LRESULT(1)),
-                WM_MEASUREITEM => {
-                    let item = &mut *(lp.0 as *mut MEASUREITEMSTRUCT);
-                    if item.CtlType == ODT_MENU {
-                        item.itemWidth = px(self.hwnd, 224) as u32;
-                        item.itemHeight = px(self.hwnd, 36) as u32;
-                        return Some(LRESULT(1));
-                    }
-                }
-                WM_DRAWITEM => {
-                    let item = &*(lp.0 as *const DRAWITEMSTRUCT);
-                    if item.CtlType == ODT_BUTTON {
-                        self.draw_header_button(item);
-                    } else if item.CtlType == ODT_MENU {
-                        let color = if item.itemState.0 & ODS_SELECTED.0 != 0 {
-                            HOVER
-                        } else {
-                            PANEL
-                        };
-                        fill(item.hDC, &item.rcItem, color);
-                        if let Some((_, service)) =
-                            SERVICES.iter().find(|(id, _)| *id == item.itemID as usize)
-                        {
-                            let x = item.rcItem.left;
-                            let y = item.rcItem.top;
-                            icon(
-                                item.hDC,
-                                self.hwnd,
-                                service_icon(*service),
-                                x + px(self.hwnd, 8),
-                                y + px(self.hwnd, 7),
-                                RED,
-                            );
-                            text(
-                                item.hDC,
-                                self.hwnd,
-                                service.label(),
-                                rect(
-                                    x + px(self.hwnd, 38),
-                                    y,
-                                    px(self.hwnd, 152),
-                                    px(self.hwnd, 36),
-                                ),
-                                13,
-                                WHITE,
-                            );
-                            if self.service.get() == *service {
-                                icon(
-                                    item.hDC,
-                                    self.hwnd,
-                                    Icon::Check,
-                                    x + px(self.hwnd, 194),
-                                    y + px(self.hwnd, 7),
-                                    WHITE,
-                                );
-                            }
-                        }
-                    } else {
-                        return None;
-                    }
-                    return Some(LRESULT(1));
-                }
-                WM_ACTIVATE | WM_DWMCOMPOSITIONCHANGED => self.extend_frame(),
-                _ => {}
+                WM_ERASEBKGND => Some(LRESULT(1)),
+                _ => None,
             }
         }
-        None
-    }
-
-    fn caption_hit(&self, position: LPARAM) -> Option<(HWND, u32)> {
-        let point = POINT {
-            x: position.0 as i16 as i32,
-            y: (position.0 >> 16) as i16 as i32,
-        };
-        // SAFETY: rectangles are read from our actual live child windows, in screen space.
-        unsafe {
-            for (button, hit) in
-                self.caption_buttons
-                    .get()
-                    .into_iter()
-                    .zip([HTMINBUTTON, HTMAXBUTTON, HTCLOSE])
-            {
-                let mut bounds = RECT::default();
-                if !button.is_invalid()
-                    && GetWindowRect(button, &mut bounds).is_ok()
-                    && PtInRect(&bounds, point).as_bool()
-                {
-                    return Some((button, hit));
-                }
-            }
-        }
-        None
-    }
-
-    fn caption_mouse(&self, button: HWND, message: u32, screen: LPARAM) {
-        let mut point = POINT {
-            x: screen.0 as i16 as i32,
-            y: (screen.0 >> 16) as i16 as i32,
-        };
-        // SAFETY: synchronous forwarding uses only scalar coordinates. BUTTON owns capture,
-        // cancellation and release-outside behavior; no manual pressed-state machine is needed.
-        unsafe {
-            let _ = ScreenToClient(button, &mut point);
-            let packed = ((point.y as u16 as u32) << 16) | point.x as u16 as u32;
-            SendMessageW(
-                button,
-                message,
-                Some(WPARAM(usize::from(message == WM_LBUTTONDOWN))),
-                Some(LPARAM(packed as isize)),
-            );
-        }
-    }
-}
-
-fn service_icon(service: Service) -> Icon {
-    if service == Service::YoutubeVideo {
-        Icon::Video
-    } else {
-        Icon::Music
     }
 }

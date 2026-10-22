@@ -57,9 +57,9 @@ thread_local! { static APP: RefCell<Option<Rc<App>>> = const { RefCell::new(None
 struct App {
     hwnd: HWND,
     icon: HICON,
+    back_button: Cell<HWND>,
     service_button: Cell<HWND>,
     settings_button: Cell<HWND>,
-    caption_buttons: Cell<[HWND; 3]>,
     settings: Cell<HWND>,
     blocker_enabled: Cell<bool>,
     blocker_busy: Cell<bool>,
@@ -155,13 +155,12 @@ pub(crate) fn run() -> std::result::Result<(), String> {
             None,
         )
         .map_err(|e| e.to_string())?;
-        theme::apply(hwnd);
         let state = Rc::new(App {
             hwnd,
             icon,
+            back_button: Cell::new(HWND::default()),
             service_button: Cell::new(HWND::default()),
             settings_button: Cell::new(HWND::default()),
-            caption_buttons: Cell::new([HWND::default(); 3]),
             settings: Cell::new(HWND::default()),
             blocker_enabled: Cell::new(blocker::load_preference()),
             blocker_busy: Cell::new(false),

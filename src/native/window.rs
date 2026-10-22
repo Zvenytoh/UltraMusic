@@ -96,7 +96,7 @@ pub(super) unsafe extern "system" fn window_proc(
             }
             return LRESULT(0);
         }
-        if let Some(result) = a.chrome_message(msg, wp, lp) {
+        if let Some(result) = a.chrome_message(msg, lp) {
             return result;
         }
         match msg {
@@ -110,7 +110,6 @@ pub(super) unsafe extern "system" fn window_proc(
             }
             MEDIA_FAILED if wp.0 == a.generation.get() => a.media_error(),
             UPDATE_READY => a.update_event(),
-            WM_THEMECHANGED | WM_SETTINGCHANGE => super::theme::apply(hwnd),
             WM_QUERYENDSESSION => return LRESULT(1),
             WM_ENDSESSION => {
                 if wp.0 != 0 {
@@ -145,7 +144,6 @@ pub(super) unsafe extern "system" fn window_proc(
                 );
                 a.resize();
                 a.layout_chrome();
-                a.extend_frame();
             }
             TRAY => match lp.0 as u32 {
                 WM_LBUTTONDBLCLK => a.restore(),
@@ -185,7 +183,7 @@ pub(super) unsafe extern "system" fn window_proc(
                 }
             }
             WM_DESTROY => {
-                a.caption_buttons.set([HWND::default(); 3]);
+                a.back_button.set(HWND::default());
                 a.service_button.set(HWND::default());
                 a.settings_button.set(HWND::default());
                 let settings = a.settings.replace(HWND::default());

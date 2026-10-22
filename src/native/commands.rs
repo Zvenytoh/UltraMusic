@@ -1,10 +1,7 @@
 //! Shared actions for the tray, header and settings window.
 use super::{dialog, App};
 use crate::config::Service;
-use windows::Win32::{
-    Foundation::{LPARAM, WPARAM},
-    UI::WindowsAndMessaging::*,
-};
+use windows::Win32::UI::WindowsAndMessaging::*;
 
 pub(super) const OPEN: usize = 1;
 pub(super) const RESTART: usize = 2;
@@ -17,9 +14,7 @@ pub(super) const VOLUME_DOWN: usize = 8;
 pub(super) const VOLUME_UP: usize = 9;
 pub(super) const SETTINGS: usize = 13;
 pub(super) const BLOCKER: usize = 14;
-pub(super) const MINIMIZE: usize = 21;
-pub(super) const MAXIMIZE: usize = 22;
-pub(super) const CLOSE: usize = 23;
+pub(super) const BACK: usize = 15;
 pub(super) const SERVICES: [(usize, Service); 3] = [
     (11, Service::Apple),
     (10, Service::Youtube),
@@ -44,23 +39,7 @@ impl App {
             VOLUME_UP => self.set_volume(self.volume.get() + 0.1),
             UPDATE => self.check_updates(true),
             BLOCKER => self.toggle_blocker(),
-            MINIMIZE | MAXIMIZE | CLOSE => {
-                // SAFETY: use the standard window command path on this UI thread.
-                unsafe {
-                    let action = match command {
-                        MINIMIZE => SC_MINIMIZE,
-                        CLOSE => SC_CLOSE,
-                        _ if IsZoomed(self.hwnd).as_bool() => SC_RESTORE,
-                        _ => SC_MAXIMIZE,
-                    };
-                    let _ = PostMessageW(
-                        Some(self.hwnd),
-                        WM_SYSCOMMAND,
-                        WPARAM(action as usize),
-                        LPARAM(0),
-                    );
-                }
-            }
+            BACK => self.go_back(),
             RESTART => {
                 if dialog(
                     Some(self.hwnd),

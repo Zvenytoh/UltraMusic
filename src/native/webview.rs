@@ -28,6 +28,21 @@ use windows::{
     },
 };
 impl App {
+    pub(super) fn go_back(&self) {
+        let Some(controller) = self.controller() else {
+            return;
+        };
+        // SAFETY: the WebView2 interface belongs to the current UI STA.
+        unsafe {
+            if let Ok(web) = controller.CoreWebView2() {
+                let mut can_go_back = BOOL(0);
+                if web.CanGoBack(&mut can_go_back).is_ok() && can_go_back.as_bool() {
+                    let _ = web.GoBack();
+                }
+            }
+        }
+    }
+
     pub(super) fn controller(&self) -> Option<ICoreWebView2Controller> {
         self.controller.borrow().clone()
     }
