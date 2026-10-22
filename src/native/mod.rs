@@ -4,13 +4,12 @@
 mod blocker;
 mod chrome;
 mod commands;
-mod drawing;
 mod instance;
 mod media;
 mod service;
 mod settings;
-mod theme;
 mod tray;
+mod ui;
 mod updates;
 mod webview;
 mod window;
@@ -57,9 +56,9 @@ thread_local! { static APP: RefCell<Option<Rc<App>>> = const { RefCell::new(None
 struct App {
     hwnd: HWND,
     icon: HICON,
-    back_button: Cell<HWND>,
-    service_button: Cell<HWND>,
-    settings_button: Cell<HWND>,
+    toolbar: Cell<HWND>,
+    ui: RefCell<Option<ui::Resources>>,
+    settings_font: RefCell<Option<ui::Font>>,
     settings: Cell<HWND>,
     blocker_enabled: Cell<bool>,
     blocker_busy: Cell<bool>,
@@ -158,9 +157,9 @@ pub(crate) fn run() -> std::result::Result<(), String> {
         let state = Rc::new(App {
             hwnd,
             icon,
-            back_button: Cell::new(HWND::default()),
-            service_button: Cell::new(HWND::default()),
-            settings_button: Cell::new(HWND::default()),
+            toolbar: Cell::new(HWND::default()),
+            ui: RefCell::new(None),
+            settings_font: RefCell::new(None),
             settings: Cell::new(HWND::default()),
             blocker_enabled: Cell::new(blocker::load_preference()),
             blocker_busy: Cell::new(false),

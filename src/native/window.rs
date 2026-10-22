@@ -18,16 +18,7 @@ impl App {
             // SAFETY: the live controller and its parent are owned by this UI thread.
             unsafe {
                 if GetClientRect(self.hwnd, &mut rect).is_ok() {
-                    rect.top =
-                        super::drawing::px(self.hwnd, super::chrome::HEIGHT).min(rect.bottom);
-                    // Keep the native resize edges outside the browser child window,
-                    // which would otherwise consume their mouse hit testing.
-                    if !IsZoomed(self.hwnd).as_bool() {
-                        let edge = super::drawing::px(self.hwnd, 6);
-                        rect.left = edge.min(rect.right);
-                        rect.right = (rect.right - edge).max(rect.left);
-                        rect.bottom = (rect.bottom - edge).max(rect.top);
-                    }
+                    rect.top = super::ui::px(self.hwnd, super::chrome::HEIGHT).min(rect.bottom);
                     let _ = c.SetBounds(rect);
                 }
             }
@@ -37,7 +28,14 @@ impl App {
         self.hidden.set(false);
         // SAFETY: all handles and COM interfaces belong to this application's STA.
         unsafe {
-            let _ = ShowWindow(self.hwnd, SW_RESTORE);
+            let _ = ShowWindow(
+                self.hwnd,
+                if IsIconic(self.hwnd).as_bool() {
+                    SW_RESTORE
+                } else {
+                    SW_SHOW
+                },
+            );
             if let Some(c) = self.controller() {
                 let _ = c.SetIsVisible(true);
                 let _ = c.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
@@ -143,7 +141,12 @@ pub(super) unsafe extern "system" fn window_proc(
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
                 a.resize();
-                a.layout_chrome();
+                let _ = a.refresh_chrome_resources();
+            }
+            WM_THEMECHANGED | WM_SETTINGCHANGE => {
+                let _ = a.refresh_chrome_resources();
+                a.refresh_settings();
+                return DefWindowProcW(hwnd, msg, wp, lp);
             }
             TRAY => match lp.0 as u32 {
                 WM_LBUTTONDBLCLK => a.restore(),
@@ -183,9 +186,7 @@ pub(super) unsafe extern "system" fn window_proc(
                 }
             }
             WM_DESTROY => {
-                a.back_button.set(HWND::default());
-                a.service_button.set(HWND::default());
-                a.settings_button.set(HWND::default());
+                a.toolbar.set(HWND::default());
                 let settings = a.settings.replace(HWND::default());
                 if !settings.is_invalid() {
                     let _ = DestroyWindow(settings);

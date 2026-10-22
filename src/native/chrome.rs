@@ -1,88 +1,234 @@
-//! Native Windows title bar and themed client toolbar.
-use super::{commands::*, drawing::*, App};
+//! System-themed native toolbar, keyboard access and provider menu.
+use super::{commands::*, ui, ui::px, App};
 use std::mem::size_of;
 use windows::{
-    core::{w, Result, HSTRING},
+    core::{w, Error, Result, HSTRING, PWSTR},
     Win32::{
-        Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM},
+        Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM},
         Graphics::Gdi::*,
-        UI::{
-            Controls::*,
-            Input::KeyboardAndMouse::{
-                GetFocus, GetKeyState, SetFocus, VK_CONTROL, VK_ESCAPE, VK_F6, VK_OEM_COMMA,
-            },
-            WindowsAndMessaging::*,
-        },
+        UI::{Controls::*, Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
     },
 };
-
 pub(super) const PICKER: usize = 20;
-pub(super) const HEIGHT: i32 = 40;
-
-pub(super) fn button(parent: HWND, id: usize, label: &str) -> Result<HWND> {
-    create_button(parent, id, label, true)
+pub(super) const HEIGHT: i32 = 44;
+const FLEX: usize = 30;
+const GAP: usize = 31;
+fn send(hwnd: HWND, msg: u32, wp: usize, lp: isize) -> LRESULT {
+    // SAFETY: callers supply scalar messages or synchronous borrowed structures.
+    unsafe { SendMessageW(hwnd, msg, Some(WPARAM(wp)), Some(LPARAM(lp))) }
 }
-
-fn toolbar_button(parent: HWND, id: usize, label: &str) -> Result<HWND> {
-    create_button(parent, id, label, false)
-}
-
-fn create_button(parent: HWND, id: usize, label: &str, owner_draw: bool) -> Result<HWND> {
-    let style = if owner_draw {
-        BS_OWNERDRAW
-    } else {
-        BS_PUSHBUTTON
-    };
-    // SAFETY: the button is an owned child of the live UI window.
-    unsafe {
-        CreateWindowExW(
-            Default::default(),
-            w!("BUTTON"),
-            &HSTRING::from(label),
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | WINDOW_STYLE(style as u32),
-            0,
-            0,
-            0,
-            0,
-            Some(parent),
-            Some(HMENU(id as *mut _)),
-            None,
-            None,
-        )
-    }
-}
-
-pub(super) fn button_background(item: &DRAWITEMSTRUCT) {
-    let selected = item.itemState.0 & ODS_SELECTED.0 != 0;
-    let color = if selected { HOVER } else { PANEL };
-    fill(item.hDC, &item.rcItem, BLACK);
-    round(
-        item.hDC,
-        &item.rcItem,
-        color,
-        if item.itemState.0 & ODS_FOCUS.0 != 0 {
-            WHITE
-        } else {
-            LINE
-        },
-        px(item.hwndItem, 10),
-    );
-}
-
 impl App {
-    pub(super) fn header_action(&self, action: isize) {
-        if action == 1 {
-            // SAFETY: the native service button belongs to this UI thread.
-            unsafe {
-                let _ = SetFocus(Some(self.back_button.get()));
+    pub(super) fn create_chrome(&self) -> Result<()> {
+        // SAFETY: children and native controls belong to this UI thread.
+        unsafe {
+            InitCommonControlsEx(&INITCOMMONCONTROLSEX {
+                dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
+                dwICC: ICC_BAR_CLASSES,
+            })
+            .ok()?;
+            let toolbar = CreateWindowExW(
+                Default::default(),
+                TOOLBARCLASSNAMEW,
+                w!("Navigation UltraMusic"),
+                WS_CHILD
+                    | WS_VISIBLE
+                    | WS_TABSTOP
+                    | WINDOW_STYLE(
+                        TBSTYLE_FLAT
+                            | TBSTYLE_LIST
+                            | TBSTYLE_TOOLTIPS
+                            | CCS_NORESIZE as u32
+                            | CCS_NOPARENTALIGN as u32
+                            | CCS_NODIVIDER as u32,
+                    ),
+                0,
+                0,
+                0,
+                0,
+                Some(self.hwnd),
+                None,
+                None,
+                None,
+            )?;
+            self.toolbar.set(toolbar);
+            send(toolbar, TB_BUTTONSTRUCTSIZE, size_of::<TBBUTTON>(), 0);
+            send(
+                toolbar,
+                TB_SETEXTENDEDSTYLE,
+                0,
+                (TBSTYLE_EX_MIXEDBUTTONS | TBSTYLE_EX_DRAWDDARROWS | TBSTYLE_EX_DOUBLEBUFFER)
+                    as isize,
+            );
+            let mut buttons = Vec::new();
+            for (id, image, style, label) in [
+                (BACK, 0, BTNS_BUTTON, "Retour"),
+                (GAP, 8, BTNS_SEP, ""),
+                (
+                    PICKER,
+                    I_IMAGENONE,
+                    BTNS_WHOLEDROPDOWN | BTNS_SHOWTEXT,
+                    "Choisir le service",
+                ),
+                (FLEX, 8, BTNS_SEP, ""),
+                (SETTINGS, 1, BTNS_BUTTON, "Paramètres"),
+            ] {
+                let label: Vec<u16> = label.encode_utf16().chain([0, 0]).collect();
+                let index = send(toolbar, TB_ADDSTRINGW, 0, label.as_ptr() as isize).0;
+                buttons.push(TBBUTTON {
+                    iBitmap: image,
+                    idCommand: id as i32,
+                    fsState: if id == BACK { 0 } else { TBSTATE_ENABLED as u8 },
+                    fsStyle: style as u8,
+                    iString: index,
+                    ..Default::default()
+                });
             }
-        } else if action == 2 {
-            self.open_settings();
+            if send(
+                toolbar,
+                TB_ADDBUTTONSW,
+                buttons.len(),
+                buttons.as_ptr() as isize,
+            )
+            .0 == 0
+            {
+                return Err(Error::from_thread());
+            }
+        }
+        self.refresh_chrome_resources()?;
+        self.refresh_ui();
+        Ok(())
+    }
+    pub(super) fn refresh_chrome_resources(&self) -> Result<()> {
+        let resources = ui::Resources::new(self.hwnd)?;
+        let toolbar = self.toolbar.get();
+        ui::apply_font(toolbar, resources.font.0);
+        send(toolbar, TB_SETIMAGELIST, 0, resources.images.0);
+        let image_size = px(self.hwnd, 16) as u32;
+        send(
+            toolbar,
+            TB_SETBITMAPSIZE,
+            0,
+            ((image_size << 16) | image_size) as isize,
+        );
+        let size = px(self.hwnd, 32) as u32;
+        send(toolbar, TB_SETBUTTONSIZE, 0, ((size << 16) | size) as isize);
+        let old = self.ui.replace(Some(resources));
+        drop(old);
+        self.layout_chrome();
+        Ok(())
+    }
+    fn toolbar_width(&self, id: usize, width: i32) {
+        let info = TBBUTTONINFOW {
+            cbSize: size_of::<TBBUTTONINFOW>() as u32,
+            dwMask: TBIF_SIZE,
+            cx: width.max(0).min(u16::MAX as i32) as u16,
+            ..Default::default()
+        };
+        send(
+            self.toolbar.get(),
+            TB_SETBUTTONINFOW,
+            id,
+            &info as *const _ as isize,
+        );
+    }
+    pub(super) fn layout_chrome(&self) {
+        let toolbar = self.toolbar.get();
+        if toolbar.is_invalid() {
+            return;
+        }
+        // SAFETY: GDI selection and DC borrowing are balanced on the UI thread.
+        unsafe {
+            let mut bounds = RECT::default();
+            let _ = GetClientRect(self.hwnd, &mut bounds);
+            let font = self.ui.borrow().as_ref().map(|r| r.font.0);
+            let mut extent = SIZE::default();
+            if let Some(font) = font {
+                let dc = GetDC(Some(toolbar));
+                let old = SelectObject(dc, font.into());
+                let label: Vec<u16> = self.service.get().label().encode_utf16().collect();
+                let _ = GetTextExtentPoint32W(dc, &label, &mut extent);
+                SelectObject(dc, old);
+                ReleaseDC(Some(toolbar), dc);
+            }
+            let provider = extent.cx + px(self.hwnd, 40);
+            self.toolbar_width(BACK, px(self.hwnd, 32));
+            self.toolbar_width(SETTINGS, px(self.hwnd, 32));
+            self.toolbar_width(PICKER, provider);
+            self.toolbar_width(GAP, px(self.hwnd, 8));
+            self.toolbar_width(
+                FLEX,
+                (bounds.right - px(self.hwnd, 88) - provider).max(px(self.hwnd, 8)),
+            );
+            send(toolbar, TB_AUTOSIZE, 0, 0);
+            let _ = SetWindowPos(
+                toolbar,
+                None,
+                px(self.hwnd, 8),
+                px(self.hwnd, 6),
+                (bounds.right - px(self.hwnd, 16)).max(0),
+                px(self.hwnd, 32),
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            );
+            let _ = InvalidateRect(Some(self.hwnd), None, false);
         }
     }
-
+    pub(super) fn refresh_ui(&self) {
+        let mut label: Vec<u16> = self
+            .service
+            .get()
+            .label()
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+        let info = TBBUTTONINFOW {
+            cbSize: size_of::<TBBUTTONINFOW>() as u32,
+            dwMask: TBIF_TEXT,
+            pszText: PWSTR(label.as_mut_ptr()),
+            ..Default::default()
+        };
+        if !self.toolbar.get().is_invalid() {
+            send(
+                self.toolbar.get(),
+                TB_SETBUTTONINFOW,
+                PICKER,
+                &info as *const _ as isize,
+            );
+            self.layout_chrome();
+        }
+        self.refresh_settings();
+    }
+    pub(super) fn refresh_navigation(&self) {
+        let mut enabled = windows::core::BOOL(0);
+        if let Some(controller) = self.controller() {
+            // SAFETY: the current controller and toolbar are confined to the UI STA.
+            unsafe {
+                if let Ok(web) = controller.CoreWebView2() {
+                    let _ = web.CanGoBack(&mut enabled);
+                }
+            }
+        }
+        send(
+            self.toolbar.get(),
+            TB_ENABLEBUTTON,
+            BACK,
+            isize::from(enabled.as_bool()),
+        );
+    }
+    pub(super) fn header_action(&self, action: isize) {
+        match action {
+            1 => {
+                // SAFETY: toolbar is an owned child window.
+                unsafe {
+                    let _ = SetFocus(Some(self.toolbar.get()));
+                }
+                send(self.toolbar.get(), TB_SETHOTITEM, 2, 0);
+            }
+            2 => self.open_settings(),
+            _ => {}
+        }
+    }
     pub(super) fn keyboard(&self, message: &MSG) -> bool {
-        // SAFETY: message and focus handles are inspected only on the UI thread.
+        // SAFETY: inspecting current-thread focus; dialog navigation is scoped to native controls.
         unsafe {
             let root = GetAncestor(message.hwnd, GA_ROOT);
             if !self.settings.get().is_invalid() && root == self.settings.get() {
@@ -95,20 +241,20 @@ impl App {
             if root != self.hwnd {
                 return false;
             }
-            let focus = GetFocus();
-            let in_header = focus == self.back_button.get()
-                || focus == self.service_button.get()
-                || focus == self.settings_button.get();
+            let in_header = GetFocus() == self.toolbar.get();
             if message.message == WM_KEYDOWN {
                 if message.wParam.0 == VK_F6.0 as usize {
                     if in_header {
                         self.focus_player();
                     } else {
-                        let _ = SetFocus(Some(self.back_button.get()));
+                        self.header_action(1);
                     }
                     return true;
                 }
-                if in_header && message.wParam.0 == VK_ESCAPE.0 as usize {
+                if in_header
+                    && (message.wParam.0 == VK_ESCAPE.0 as usize
+                        || message.wParam.0 == VK_TAB.0 as usize)
+                {
                     self.focus_player();
                     return true;
                 }
@@ -119,115 +265,52 @@ impl App {
                     return true;
                 }
             }
-            in_header && IsDialogMessageW(self.hwnd, message).as_bool()
+            false
         }
     }
-
     fn focus_player(&self) {
         if let Some(controller) = self.controller() {
-            // SAFETY: controller belongs to this UI STA.
+            // SAFETY: current STA controller owns focus transfer to the browser.
             unsafe {
-                let _ = controller.MoveFocus(
-                    webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC,
-                );
+                let _=controller.MoveFocus(webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
             }
         }
     }
-
-    pub(super) fn create_chrome(&self) -> Result<()> {
-        // SAFETY: initialize native common controls before creating toolbar buttons.
-        unsafe {
-            InitCommonControlsEx(&INITCOMMONCONTROLSEX {
-                dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
-                dwICC: ICC_WIN95_CLASSES,
-            })
-            .ok()?;
-        }
-        self.back_button
-            .set(toolbar_button(self.hwnd, BACK, "← Retour")?);
-        self.service_button
-            .set(toolbar_button(self.hwnd, PICKER, "Choisir le service")?);
-        self.settings_button
-            .set(toolbar_button(self.hwnd, SETTINGS, "Paramètres")?);
-        self.layout_chrome();
-        self.refresh_ui();
-        Ok(())
-    }
-
-    pub(super) fn layout_chrome(&self) {
-        // SAFETY: child buttons belong to this window and all sizes are DPI-aware.
-        unsafe {
-            let mut bounds = RECT::default();
-            let _ = GetClientRect(self.hwnd, &mut bounds);
-            let height = px(self.hwnd, 30);
-            let top = px(self.hwnd, 5);
-            for (child, x, width) in [
-                (self.back_button.get(), px(self.hwnd, 12), px(self.hwnd, 88)),
-                (
-                    self.service_button.get(),
-                    px(self.hwnd, 108),
-                    px(self.hwnd, 200),
-                ),
-                (
-                    self.settings_button.get(),
-                    bounds.right - px(self.hwnd, 112),
-                    px(self.hwnd, 100),
-                ),
-            ] {
-                let _ = SetWindowPos(
-                    child,
-                    None,
-                    x,
-                    top,
-                    width,
-                    height,
-                    SWP_NOZORDER | SWP_NOACTIVATE,
-                );
-            }
-            let header = rect(0, 0, bounds.right, px(self.hwnd, HEIGHT));
-            let _ = InvalidateRect(Some(self.hwnd), Some(&header), false);
-        }
-    }
-
-    pub(super) fn refresh_ui(&self) {
-        // SAFETY: the service button is owned by this live UI window.
-        unsafe {
-            let button = self.service_button.get();
-            if !button.is_invalid() {
-                let _ = SetWindowTextW(
-                    button,
-                    &HSTRING::from(format!("{} ▾", self.service.get().label())),
-                );
-            }
-        }
-        self.refresh_settings();
-    }
-
     pub(super) fn service_menu(&self) {
-        // SAFETY: the popup owns only native menu strings and is destroyed after use.
+        // SAFETY: native menu strings are copied; the menu is destroyed after its modal loop.
         unsafe {
             let Ok(menu) = CreatePopupMenu() else { return };
             for (id, service) in SERVICES {
-                let selected = if self.service.get() == service {
-                    MF_CHECKED
-                } else {
-                    MF_UNCHECKED
-                };
                 let _ = AppendMenuW(
                     menu,
-                    MF_STRING | selected,
+                    MF_STRING
+                        | if self.service.get() == service {
+                            MF_CHECKED
+                        } else {
+                            MF_UNCHECKED
+                        },
                     id,
                     &HSTRING::from(service.label()),
                 );
             }
             let mut bounds = RECT::default();
-            let _ = GetWindowRect(self.service_button.get(), &mut bounds);
+            send(
+                self.toolbar.get(),
+                TB_GETRECT,
+                PICKER,
+                &mut bounds as *mut _ as isize,
+            );
+            let mut point = POINT {
+                x: bounds.left,
+                y: bounds.bottom,
+            };
+            let _ = ClientToScreen(self.toolbar.get(), &mut point);
             let _ = SetForegroundWindow(self.hwnd);
             let command = TrackPopupMenu(
                 menu,
                 TPM_RETURNCMD | TPM_LEFTALIGN,
-                bounds.left,
-                bounds.bottom,
+                point.x,
+                point.y,
                 None,
                 self.hwnd,
                 None,
@@ -240,14 +323,21 @@ impl App {
             }
         }
     }
-
     pub(super) fn chrome_message(&self, msg: u32, lp: LPARAM) -> Option<LRESULT> {
-        // SAFETY: message pointers are borrowed from Windows for this dispatch only.
+        // SAFETY: message-specific pointers are borrowed only for this dispatch.
         unsafe {
             match msg {
+                WM_NOTIFY => {
+                    let header = &*(lp.0 as *const NMHDR);
+                    if header.hwndFrom == self.toolbar.get() && header.code == TBN_DROPDOWN {
+                        self.service_menu();
+                        return Some(LRESULT(0));
+                    }
+                    None
+                }
                 WM_GETMINMAXINFO => {
                     let info = &mut *(lp.0 as *mut MINMAXINFO);
-                    info.ptMinTrackSize = windows::Win32::Foundation::POINT {
+                    info.ptMinTrackSize = POINT {
                         x: px(self.hwnd, 500),
                         y: px(self.hwnd, 440),
                     };
@@ -256,11 +346,10 @@ impl App {
                 WM_PAINT => {
                     let mut paint = PAINTSTRUCT::default();
                     let dc = BeginPaint(self.hwnd, &mut paint);
-                    let color = COLORREF(GetSysColor(COLOR_BTNFACE));
-                    let mut header = rect(0, 0, 0, px(self.hwnd, HEIGHT));
-                    let _ = GetClientRect(self.hwnd, &mut header);
-                    header.bottom = px(self.hwnd, HEIGHT).min(header.bottom);
-                    fill(dc, &header, color);
+                    let mut r = RECT::default();
+                    let _ = GetClientRect(self.hwnd, &mut r);
+                    r.bottom = px(self.hwnd, HEIGHT).min(r.bottom);
+                    FillRect(dc, &r, GetSysColorBrush(COLOR_BTNFACE));
                     let _ = EndPaint(self.hwnd, &paint);
                     Some(LRESULT(0))
                 }

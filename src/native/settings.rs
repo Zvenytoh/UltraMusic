@@ -1,41 +1,140 @@
-//! Owned modeless settings window; controls reuse the tray's application actions.
-use super::{
-    app,
-    chrome::{button, button_background},
-    commands::*,
-    drawing::*,
-    App,
-};
+//! Owned modeless settings using themed Windows controls and a real volume trackbar.
+use super::{app, commands::*, ui, ui::px, App};
+use std::mem::size_of;
 use windows::{
-    core::{w, HSTRING},
+    core::{w, Result, HSTRING},
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
         Graphics::Gdi::*,
         System::LibraryLoader::GetModuleHandleW,
-        UI::{Controls::*, HiDpi::AdjustWindowRectExForDpi, WindowsAndMessaging::*},
+        UI::{
+            Controls::*,
+            HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow},
+            WindowsAndMessaging::*,
+        },
     },
 };
-
 const CLASS: windows::core::PCWSTR = w!("UltraMusic.Settings.1");
-const ROWS: [(usize, &str, i32, i32, i32, i32); 6] = [
-    (VOLUME_DOWN, "Diminuer le volume", 24, 92, 36, 36),
-    (VOLUME_UP, "Augmenter le volume", 396, 92, 36, 36),
-    (MUTE, "Couper le son", 24, 150, 408, 44),
-    (COMPAT, "Conserver le rendu", 24, 234, 408, 48),
+// TBM_GETPOS is WM_USER + 0; windows metadata does not export this alias.
+const TBM_GETPOS: u32 = WM_USER;
+const SLIDER: usize = 40;
+const PERCENT: usize = 41;
+const STATUS: usize = 42;
+const VERSION: usize = 43;
+// Logical coordinates; native labels wrap within their measured font's layout area.
+type ControlSpec = (usize, &'static str, &'static str, i32, i32, i32, i32, u32);
+const ROWS: [ControlSpec; 13] = [
+    (50, "BUTTON", "Audio", 16, 16, 424, 180, BS_GROUPBOX as u32),
+    (51, "STATIC", "Volume de l’application", 32, 40, 280, 24, 0),
+    (
+        SLIDER,
+        "msctls_trackbar32",
+        "Volume",
+        24,
+        68,
+        336,
+        28,
+        TBS_NOTICKS,
+    ),
+    (PERCENT, "STATIC", "100 %", 368, 72, 64, 24, 0),
+    (
+        MUTE,
+        "BUTTON",
+        "Couper le son",
+        32,
+        104,
+        392,
+        24,
+        BS_CHECKBOX as u32,
+    ),
+    (
+        COMPAT,
+        "BUTTON",
+        "Conserver le rendu en arrière-plan",
+        32,
+        136,
+        392,
+        24,
+        BS_CHECKBOX as u32,
+    ),
+    (
+        52,
+        "STATIC",
+        "Garde le rendu actif lorsque le lecteur est masqué.",
+        32,
+        164,
+        392,
+        24,
+        0,
+    ),
+    (
+        53,
+        "BUTTON",
+        "Protection YouTube",
+        16,
+        212,
+        424,
+        128,
+        BS_GROUPBOX as u32,
+    ),
     (
         BLOCKER,
-        "Bloquer les publicités YouTube — recharge le lecteur",
+        "BUTTON",
+        "Bloquer les publicités YouTube",
+        32,
+        240,
+        392,
         24,
-        354,
-        408,
-        44,
+        BS_CHECKBOX as u32,
     ),
-    (UPDATE, "Vérifier les mises à jour", 24, 494, 408, 42),
+    (
+        STATUS,
+        "STATIC",
+        "Initialisation du module…",
+        32,
+        272,
+        392,
+        24,
+        0,
+    ),
+    (
+        54,
+        "STATIC",
+        "Modifier cette option recharge la page et interrompt la lecture.",
+        32,
+        302,
+        392,
+        32,
+        0,
+    ),
+    (
+        55,
+        "BUTTON",
+        "Application",
+        16,
+        356,
+        424,
+        100,
+        BS_GROUPBOX as u32,
+    ),
+    (
+        VERSION,
+        "STATIC",
+        concat!("UltraMusic ", env!("CARGO_PKG_VERSION")),
+        32,
+        380,
+        392,
+        24,
+        0,
+    ),
 ];
-
+fn send(hwnd: HWND, msg: u32, wp: usize, lp: isize) -> LRESULT {
+    // SAFETY: synchronous scalar control messages on the owning UI thread.
+    unsafe { SendMessageW(hwnd, msg, Some(WPARAM(wp)), Some(LPARAM(lp))) }
+}
 impl App {
     pub(super) fn open_settings(&self) {
-        // SAFETY: this owned modeless window lives entirely on the same UI thread.
+        // SAFETY: registered class and children belong to the owning UI thread.
         unsafe {
             let existing = self.settings.get();
             if !existing.is_invalid() {
@@ -51,18 +150,22 @@ impl App {
                 lpfnWndProc: Some(settings_proc),
                 hCursor: LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
                 hIcon: self.icon,
+                hbrBackground: GetSysColorBrush(COLOR_BTNFACE),
                 ..Default::default()
             };
-            // Reopening uses the same registered class.
             RegisterClassW(&class);
             let style = WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN;
-            let mut bounds = rect(0, 0, px(self.hwnd, 456), px(self.hwnd, 560));
+            let mut bounds = RECT {
+                right: px(self.hwnd, 456),
+                bottom: px(self.hwnd, 472),
+                ..Default::default()
+            };
             let _ = AdjustWindowRectExForDpi(
                 &mut bounds,
                 style,
                 false,
                 WS_EX_CONTROLPARENT,
-                windows::Win32::UI::HiDpi::GetDpiForWindow(self.hwnd),
+                GetDpiForWindow(self.hwnd),
             );
             let mut parent = RECT::default();
             let _ = GetWindowRect(self.hwnd, &mut parent);
@@ -87,72 +190,142 @@ impl App {
                 return;
             };
             self.settings.set(hwnd);
-            super::theme::apply(hwnd);
-            for (id, label, _, _, _, _) in ROWS {
-                if button(hwnd, id, label).is_err() {
-                    let _ = DestroyWindow(hwnd);
-                    super::show_error("Impossible de créer les commandes des paramètres.");
-                    return;
-                }
+            if self.create_settings_controls(hwnd).is_err() {
+                let _ = DestroyWindow(hwnd);
+                super::show_error("Impossible de créer les paramètres.");
+                return;
             }
-            layout(hwnd);
             self.refresh_settings();
             let _ = ShowWindow(hwnd, SW_SHOW);
             let _ = windows::Win32::UI::Input::KeyboardAndMouse::SetFocus(
-                GetDlgItem(Some(hwnd), VOLUME_DOWN as i32).ok(),
+                GetDlgItem(Some(hwnd), SLIDER as i32).ok(),
             );
         }
     }
-
+    fn create_settings_controls(&self, hwnd: HWND) -> Result<()> {
+        // SAFETY: native children are owned by settings; failed creation destroys their parent.
+        unsafe {
+            InitCommonControlsEx(&INITCOMMONCONTROLSEX {
+                dwSize: size_of::<INITCOMMONCONTROLSEX>() as u32,
+                dwICC: ICC_BAR_CLASSES,
+            })
+            .ok()?;
+            for (id, class, label, _, _, _, _, style) in ROWS {
+                let tab = if matches!(id, SLIDER | MUTE | COMPAT | BLOCKER) {
+                    WS_TABSTOP
+                } else {
+                    WINDOW_STYLE(0)
+                };
+                CreateWindowExW(
+                    Default::default(),
+                    &HSTRING::from(class),
+                    &HSTRING::from(label),
+                    WS_CHILD | WS_VISIBLE | tab | WINDOW_STYLE(style),
+                    0,
+                    0,
+                    0,
+                    0,
+                    Some(hwnd),
+                    Some(HMENU(id as *mut _)),
+                    None,
+                    None,
+                )?;
+            }
+            CreateWindowExW(
+                Default::default(),
+                w!("BUTTON"),
+                w!("Vérifier les mises à jour"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                0,
+                0,
+                0,
+                0,
+                Some(hwnd),
+                Some(HMENU(UPDATE as *mut _)),
+                None,
+                None,
+            )?;
+            let slider = GetDlgItem(Some(hwnd), SLIDER as i32)?;
+            send(slider, TBM_SETRANGEMIN, 0, 0);
+            send(slider, TBM_SETRANGEMAX, 0, 100);
+            send(slider, TBM_SETPAGESIZE, 0, 10);
+        }
+        self.layout_settings(hwnd)
+    }
+    fn layout_settings(&self, hwnd: HWND) -> Result<()> {
+        let font = ui::Font::new(hwnd)?;
+        // SAFETY: only known controls are updated; the new font is installed before dropping the old one.
+        unsafe {
+            for (id, _, _, x, y, width, height, _) in ROWS {
+                if let Ok(child) = GetDlgItem(Some(hwnd), id as i32) {
+                    ui::apply_font(child, font.0);
+                    let _ = SetWindowPos(
+                        child,
+                        None,
+                        px(hwnd, x),
+                        px(hwnd, y),
+                        px(hwnd, width),
+                        px(hwnd, height),
+                        SWP_NOZORDER | SWP_NOACTIVATE,
+                    );
+                }
+            }
+            if let Ok(child) = GetDlgItem(Some(hwnd), UPDATE as i32) {
+                ui::apply_font(child, font.0);
+                let _ = SetWindowPos(
+                    child,
+                    None,
+                    px(hwnd, 32),
+                    px(hwnd, 412),
+                    px(hwnd, 392),
+                    px(hwnd, 28),
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+            }
+        }
+        let old = self.settings_font.replace(Some(font));
+        drop(old);
+        self.refresh_settings();
+        Ok(())
+    }
     pub(super) fn refresh_settings(&self) {
         let hwnd = self.settings.get();
         if hwnd.is_invalid() {
             return;
         }
-        // SAFETY: windows and children belong to this UI thread; no borrow spans calls.
+        // SAFETY: all controls are owned by the current settings window.
         unsafe {
-            for (id, action) in [(VOLUME_DOWN, "Diminuer"), (VOLUME_UP, "Augmenter")] {
+            for (id, checked) in [
+                (MUTE, self.muted.get()),
+                (COMPAT, self.keep_rendering.get()),
+                (BLOCKER, self.blocker_enabled.get()),
+            ] {
                 if let Ok(child) = GetDlgItem(Some(hwnd), id as i32) {
-                    let _ = SetWindowTextW(
+                    send(
                         child,
-                        &HSTRING::from(format!(
-                            "{action} le volume ({} %)",
-                            (self.volume.get() * 100.0).round() as u32
-                        )),
+                        BM_SETCHECK,
+                        if checked {
+                            BST_CHECKED.0 as usize
+                        } else {
+                            BST_UNCHECKED.0 as usize
+                        },
+                        0,
                     );
                 }
             }
+            let percent = (self.volume.get() * 100.0).round() as usize;
+            if let Ok(slider) = GetDlgItem(Some(hwnd), SLIDER as i32) {
+                send(slider, TBM_SETPOS, 1, percent as isize);
+            }
             for (id, label) in [
-                (
-                    BLOCKER,
-                    if self.blocker_enabled.get() {
-                        "Bloqueur YouTube : activé — recharge le lecteur"
-                    } else {
-                        "Bloqueur YouTube : désactivé — recharge le lecteur"
-                    },
-                ),
-                (
-                    MUTE,
-                    if self.muted.get() {
-                        "Réactiver le son"
-                    } else {
-                        "Couper le son"
-                    },
-                ),
-                (
-                    COMPAT,
-                    if self.keep_rendering.get() {
-                        "Conserver le rendu : activé"
-                    } else {
-                        "Conserver le rendu : désactivé"
-                    },
-                ),
+                (PERCENT, format!("{percent} %")),
+                (STATUS, self.blocker_status().to_string()),
                 (
                     UPDATE,
                     if self.update_busy.get() {
-                        "Afficher le résultat de la vérification…"
+                        "Afficher le résultat de la vérification…".to_string()
                     } else {
-                        "Vérifier les mises à jour"
+                        "Vérifier les mises à jour".to_string()
                     },
                 ),
             ] {
@@ -163,167 +336,9 @@ impl App {
             let _ = RedrawWindow(Some(hwnd), None, None, RDW_INVALIDATE | RDW_ALLCHILDREN);
         }
     }
-
-    fn paint_settings(&self, hwnd: HWND, dc: HDC) {
-        let r = |x, y, w, h| rect(px(hwnd, x), px(hwnd, y), px(hwnd, w), px(hwnd, h));
-        fill(dc, &r(0, 0, 456, 560), BLACK);
-        text(dc, hwnd, "Audio", r(24, 18, 408, 28), 19, WHITE);
-        text(
-            dc,
-            hwnd,
-            &format!(
-                "Volume de l’application · {} %",
-                (self.volume.get() * 100.0).round() as u32
-            ),
-            r(24, 54, 408, 28),
-            13,
-            MUTED,
-        );
-        round(dc, &r(80, 107, 296, 6), LINE, LINE, px(hwnd, 6));
-        round(
-            dc,
-            &r(80, 107, (296.0 * self.volume.get()).round() as i32, 6),
-            RED,
-            RED,
-            px(hwnd, 6),
-        );
-        round(
-            dc,
-            &r(75 + (296.0 * self.volume.get()).round() as i32, 102, 12, 16),
-            WHITE,
-            WHITE,
-            px(hwnd, 10),
-        );
-        text(
-            dc,
-            hwnd,
-            "Lecture en arrière-plan",
-            r(24, 204, 408, 26),
-            13,
-            MUTED,
-        );
-        text(
-            dc,
-            hwnd,
-            "Garde le rendu actif lorsque la fenêtre est masquée.",
-            r(24, 288, 408, 24),
-            11,
-            MUTED,
-        );
-        text(
-            dc,
-            hwnd,
-            "Protection YouTube",
-            r(24, 326, 408, 24),
-            13,
-            MUTED,
-        );
-        text(
-            dc,
-            hwnd,
-            self.blocker_status(),
-            r(24, 402, 408, 24),
-            11,
-            MUTED,
-        );
-        text(dc, hwnd, "Application", r(24, 446, 408, 24), 13, MUTED);
-        text(
-            dc,
-            hwnd,
-            concat!("UltraMusic ", env!("CARGO_PKG_VERSION")),
-            r(24, 470, 408, 20),
-            12,
-            WHITE,
-        );
-    }
-
-    fn draw_setting(&self, item: &DRAWITEMSTRUCT) {
-        let hwnd = item.hwndItem;
-        button_background(item);
-        let id = item.CtlID as usize;
-        if id == VOLUME_DOWN || id == VOLUME_UP {
-            icon(
-                item.hDC,
-                hwnd,
-                if id == VOLUME_DOWN {
-                    Icon::Minus
-                } else {
-                    Icon::Plus
-                },
-                px(hwnd, 7),
-                px(hwnd, 7),
-                WHITE,
-            );
-        } else {
-            let selected = (id == MUTE && self.muted.get())
-                || (id == COMPAT && self.keep_rendering.get())
-                || (id == BLOCKER && self.blocker_enabled.get());
-            if selected {
-                icon(
-                    item.hDC,
-                    hwnd,
-                    Icon::Check,
-                    px(hwnd, 14),
-                    (item.rcItem.bottom - px(hwnd, 22)) / 2,
-                    RED,
-                );
-            }
-            let label = match id {
-                MUTE => {
-                    if self.muted.get() {
-                        "Réactiver le son"
-                    } else {
-                        "Couper le son"
-                    }
-                }
-                COMPAT => "Conserver le rendu",
-                BLOCKER => "Bloquer les publicités YouTube",
-                _ => {
-                    if self.update_busy.get() {
-                        "Afficher le résultat de la vérification…"
-                    } else {
-                        "Vérifier les mises à jour"
-                    }
-                }
-            };
-            text(
-                item.hDC,
-                hwnd,
-                label,
-                rect(
-                    px(hwnd, 46),
-                    0,
-                    item.rcItem.right - px(hwnd, 60),
-                    item.rcItem.bottom,
-                ),
-                13,
-                WHITE,
-            );
-        }
-    }
 }
-
-fn layout(hwnd: HWND) {
-    // SAFETY: fixed known child IDs belong to this settings window.
-    unsafe {
-        for (id, _, x, y, w, h) in ROWS {
-            if let Ok(child) = GetDlgItem(Some(hwnd), id as i32) {
-                let _ = SetWindowPos(
-                    child,
-                    None,
-                    px(hwnd, x),
-                    px(hwnd, y),
-                    px(hwnd, w),
-                    px(hwnd, h),
-                    SWP_NOZORDER | SWP_NOACTIVATE,
-                );
-            }
-        }
-    }
-}
-
 unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
-    // SAFETY: called by Windows; payload pointers are borrowed only during dispatch.
+    // SAFETY: Windows invokes this on the UI thread with message-scoped payloads.
     unsafe {
         let Some(app) = app() else {
             return DefWindowProcW(hwnd, msg, wp, lp);
@@ -331,9 +346,31 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
         match msg {
             WM_COMMAND => {
                 let id = wp.0 & 0xffff;
-                if ROWS.iter().any(|(command, ..)| *command == id) {
+                if wp.0 >> 16 == BN_CLICKED as usize
+                    && matches!(id, MUTE | COMPAT | BLOCKER | UPDATE)
+                {
                     app.command(id);
                 }
+            }
+            WM_HSCROLL => {
+                if let Ok(slider) = GetDlgItem(Some(hwnd), SLIDER as i32) {
+                    if lp.0 == slider.0 as isize {
+                        app.set_volume(send(slider, TBM_GETPOS, 0, 0).0 as f32 / 100.0);
+                        app.refresh_ui();
+                    }
+                }
+            }
+            WM_CTLCOLORSTATIC | WM_CTLCOLORBTN => {
+                let dc = HDC(wp.0 as *mut _);
+                SetTextColor(
+                    dc,
+                    windows::Win32::Foundation::COLORREF(GetSysColor(COLOR_BTNTEXT)),
+                );
+                SetBkColor(
+                    dc,
+                    windows::Win32::Foundation::COLORREF(GetSysColor(COLOR_BTNFACE)),
+                );
+                return LRESULT(GetSysColorBrush(COLOR_BTNFACE).0 as isize);
             }
             WM_CLOSE => {
                 let _ = DestroyWindow(hwnd);
@@ -343,28 +380,10 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
                     app.settings.set(HWND::default());
                 }
             }
-            WM_ERASEBKGND => return LRESULT(1),
-            WM_PAINT => {
-                let mut paint = PAINTSTRUCT::default();
-                let dc = BeginPaint(hwnd, &mut paint);
-                app.paint_settings(hwnd, dc);
-                let _ = EndPaint(hwnd, &paint);
-            }
-            WM_DRAWITEM => {
-                app.draw_setting(&*(lp.0 as *const DRAWITEMSTRUCT));
-                return LRESULT(1);
-            }
-            WM_LBUTTONDOWN => {
-                let x = lp.0 as i16 as i32;
-                let y = (lp.0 >> 16) as i16 as i32;
-                if x >= px(hwnd, 80)
-                    && x <= px(hwnd, 376)
-                    && y >= px(hwnd, 96)
-                    && y <= px(hwnd, 128)
-                {
-                    app.set_volume((x - px(hwnd, 80)) as f32 / px(hwnd, 296) as f32);
-                    app.refresh_ui();
-                }
+            WM_NCDESTROY => {
+                let old = app.settings_font.replace(None);
+                drop(old);
+                return DefWindowProcW(hwnd, msg, wp, lp);
             }
             WM_DPICHANGED => {
                 let r = &*(lp.0 as *const RECT);
@@ -377,10 +396,12 @@ unsafe extern "system" fn settings_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LP
                     r.bottom - r.top,
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
-                layout(hwnd);
-                app.refresh_settings();
+                let _ = app.layout_settings(hwnd);
             }
-            WM_THEMECHANGED | WM_SETTINGCHANGE => super::theme::apply(hwnd),
+            WM_THEMECHANGED | WM_SETTINGCHANGE => {
+                let _ = app.layout_settings(hwnd);
+                return DefWindowProcW(hwnd, msg, wp, lp);
+            }
             _ => return DefWindowProcW(hwnd, msg, wp, lp),
         }
         LRESULT(0)

@@ -4,7 +4,7 @@ use crate::config::external_url;
 use webview2_com::{
     AcceleratorKeyPressedEventHandler, CoTaskMemPWSTR, CoreWebView2EnvironmentOptions,
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
-    DownloadStartingEventHandler,
+    DownloadStartingEventHandler, HistoryChangedEventHandler,
     Microsoft::Web::WebView2::Win32::{
         CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2Controller,
         ICoreWebView2EnvironmentOptions, ICoreWebView2_4, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN,
@@ -54,6 +54,7 @@ impl App {
         let extension = self.blocker.borrow_mut().take();
         drop(extension);
         let controller = self.controller.borrow_mut().take();
+        self.refresh_navigation();
         if let Some(c) = controller {
             // SAFETY: c is an owned STA reference and the RefCell borrow has ended.
             unsafe {
@@ -145,6 +146,16 @@ impl App {
             controller.SetIsVisible(!self.hidden.get() || self.keep_rendering.get())?;
             let web = controller.CoreWebView2()?;
             self.attach_media(&web, generation)?;
+            let mut history_token = 0;
+            web.add_HistoryChanged(
+                &HistoryChangedEventHandler::create(Box::new(move |_, _| {
+                    if let Some(app) = current(generation) {
+                        app.refresh_navigation();
+                    }
+                    Ok(())
+                })),
+                &mut history_token,
+            )?;
             let settings = web.Settings()?;
             settings.SetIsWebMessageEnabled(false)?;
             settings.SetAreHostObjectsAllowed(false)?;
