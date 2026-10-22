@@ -150,7 +150,7 @@ fn add_icon(hwnd: HWND, images: HIMAGELIST, icon: Icon, color: COLORREF) -> Resu
         let old_bitmap = SelectObject(dc, bitmap.into());
         std::slice::from_raw_parts_mut(bits.cast::<u32>(), (render_side * render_side) as usize)
             .fill(0x00ffffff);
-        let pen = CreatePen(PS_SOLID, ((render_side + 6) / 12).max(1), COLORREF(0));
+        let pen = CreatePen(PS_SOLID, (render_side / 16).max(1), COLORREF(0));
         if pen.is_invalid() {
             SelectObject(dc, old_bitmap);
             let _ = DeleteObject(bitmap.into());
@@ -181,10 +181,10 @@ fn add_icon(hwnd: HWND, images: HIMAGELIST, icon: Icon, color: COLORREF) -> Resu
                 stroke(&[(9, 4), (9, 20)]);
             }
             Icon::Settings => {
-                let points: Vec<_> = (0..=32)
+                let points: Vec<_> = (0..=24)
                     .map(|i| {
-                        let angle = (i as f64 - 0.5) * std::f64::consts::TAU / 32.0;
-                        let radius = if i % 4 == 1 || i % 4 == 2 { 10.0 } else { 8.0 };
+                        let angle = (i as f64 - 0.5) * std::f64::consts::TAU / 24.0;
+                        let radius = if i % 4 == 1 || i % 4 == 2 { 9.0 } else { 7.0 };
                         windows::Win32::Foundation::POINT {
                             x: ((12.0 + radius * angle.cos()) * render_side as f64 / 24.0).round()
                                 as i32,
@@ -194,7 +194,7 @@ fn add_icon(hwnd: HWND, images: HIMAGELIST, icon: Icon, color: COLORREF) -> Resu
                     })
                     .collect();
                 let _ = Polyline(dc, &points);
-                let _ = Ellipse(dc, p(9), p(9), p(15), p(15));
+                let _ = Ellipse(dc, p(8), p(8), p(16), p(16));
             }
         }
         let _ = GdiFlush();

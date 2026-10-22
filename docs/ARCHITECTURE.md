@@ -333,3 +333,16 @@ radio et utilisent une présentation segmentée. Les titres sont plus discrets,
 avec un lissage explicite et une disposition qui tient dans la taille initiale.
 
 Le périmètre réellement vérifié est décrit dans [UI-VERIFICATION-2026-10-22.md](UI-VERIFICATION-2026-10-22.md).
+
+## Version 0.5.2 : proportions de la barre native
+
+La hauteur partagée par le cadre, le hit-test et le rectangle WebView2 passe à
+32 pixels logiques. Les commandes DWM gardant leur taille native, la hauteur de
+44 pixels ajoutait un espace vide sous les icônes. Les cibles de navigation
+restent de 40 × 32 pixels. Les traits sont ramenés à un pixel logique, le symbole
+des paramètres est simplifié et son centre ouvert. Le focus clavier est rentré
+de deux pixels dans les boutons afin de rester visible au bord du client.
+
+La consigne finale interdit de reprendre le contrôle du bureau. La compilation
+et les contrôles statiques ne constituent donc pas une validation visuelle
+complète de cette version. Voir [UI-REFINEMENT-0.5.2.md](UI-REFINEMENT-0.5.2.md).

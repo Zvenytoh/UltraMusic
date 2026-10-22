@@ -69,14 +69,14 @@ jobs:
           Microsoft Edge WebView2 is installed when needed.
 
           ### Included
-          - Opaque title/toolbar painting fixes the gray overlay and white trailing strip.
-          - Native caption buttons remain visible and keep their Windows behavior.
-          - Clean vector Back, Forward, workspace and Settings icons replace font glyphs.
-          - A 44 px header and evenly spaced controls align with Windows caption icons, including when maximized.
-          - Quieter Segoe typography and a segmented appearance selector.
-          - Settings fit their normal opening size without an unnecessary vertical scrollbar.
-          - The volume slider remains visible after switching between dark and light themes.
-          - Targeted visual/manual checks now supplement formatting, lint and compilation.
+          - A standard 32 logical pixel title row removes the unused space below the native Windows caption buttons.
+          - Wide 40 px navigation targets are retained, with lighter, consistent icon strokes.
+          - The Settings icon has a simpler, more open silhouette.
+          - Keyboard focus is inset inside each toolbar button to avoid clipping at the window edge.
+          - Native Windows caption controls, provider navigation and stored preferences are preserved.
+
+          This refinement was checked statically and built by Windows CI. Final maximized,
+          DPI and installer behavior were not rechecked interactively at the user's request.
 
           The appearance setting affects UltraMusic's host; music providers keep their own page themes.
 

@@ -276,7 +276,14 @@ impl App {
                 );
             }
             if draw.nmcd.uItemState & CDIS_FOCUS != NMCUSTOMDRAW_DRAW_STATE_FLAGS(0) {
-                let _ = DrawFocusRect(dc, &r);
+                let inset = px(self.hwnd, 2);
+                let focus = RECT {
+                    left: r.left + inset,
+                    top: r.top + inset,
+                    right: r.right - inset,
+                    bottom: r.bottom - inset,
+                };
+                let _ = DrawFocusRect(dc, &focus);
             }
         }
         LRESULT(CDRF_SKIPDEFAULT as isize)

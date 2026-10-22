@@ -10,4 +10,4 @@
 - Use the project Graphify skill for architecture and relationship questions when a graph exists; keep generated graph output local.
 - Do not use subagents unless the user asks for them.
 
-- The user authorized targeted manual UI verification on 2026-10-22: open UltraMusic and check rendering/interactions for UI fixes. Do not infer visual correctness from formatting, lint or build success. Unit tests remain opt-in.
+- Manual UI checks were previously authorized on 2026-10-22. The latest instruction requires finishing without desktop control: do not launch the player or use UI automation unless explicitly reauthorized. Static checks and CI remain permitted. Never infer visual correctness from build success. Unit tests remain opt-in.

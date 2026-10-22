@@ -10,7 +10,8 @@ use windows::{
     },
 };
 pub(super) const PICKER: usize = 20;
-pub(super) const HEIGHT: i32 = 44;
+// Match the standard Windows title row; added height would not enlarge DWM's caption buttons.
+pub(super) const HEIGHT: i32 = 32;
 const BUTTON_WIDTH: i32 = 40;
 const BUTTON_HEIGHT: i32 = 32;
 // TB_SETBKCOLOR is the toolbar alias for this common-controls message.
